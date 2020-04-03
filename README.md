@@ -39,24 +39,29 @@ Wherever there is activity on the web interface (configuration, monitoring), the
 
 # Wiring diagram
 
+         Wemos D1:
                             +-----+ 
                        Rst  +  W  +  Tx
                         A0  +  E  +  Rx
                  D0/GPIO16  +  M  +  D1/GPIO5   -> RS422 En
-        LED_B <- D5/GPIO14  +  O  +  D2/GPIO4   -> RS422 Tx
+        LED_B <- D5/GPIO14  +  O  +  D2/GPIO4 
         LED_R <- D6/GPIO12  +  S  +  D3/GPIO0*
-    NEO/LED_G <- D7/GPIO13  +     +  D4/GPIO2*
+    NEO/LED_G <- D7/GPIO13  +     +  D4/GPIO2*  -> RS422 Tx
                  D8/GPIO15* +  D  +  Gnd
                        3V3  +  1  +  5V
                             +-----+ 
 
 
-	MAX485:		1 Rx      vcc 8
-			2 RxEn   outb 7
-			3 TxEn   outa 6
-			4 Tx      gnd 5
+            MAX485:		1 Rx      vcc 8
+			            2 RxEn   outb 7
+			            3 TxEn   outa 6
+			            4 Tx      gnd 5
 
-There is also a schematcics among the files
+There is also a schematics among the files
+
+# ToDo
+
+Add an Artnet PollReply so that the device is visible to Artnet controllers
 
 # Reference
 
