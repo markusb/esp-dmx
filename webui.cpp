@@ -1,0 +1,371 @@
+/*
+ * ESP-DMX web ui
+ * 
+ * Webinterface related files
+ * 
+ */
+
+#include <Arduino.h>
+#include <ArduinoJson.h>
+#include <ESP8266WebServer.h>
+#include <WiFiUdp.h>
+#include <FS.h>
+#include "webui.h"
+#include "favicon.h"
+#include "dmx512.h"
+
+extern ESP8266WebServer webServer;
+extern Config config;
+extern const char* version;
+extern int status;
+extern char * status_text[];
+extern unsigned long packetCounter;
+extern unsigned long dmxUMatchCounter;
+extern unsigned long dmxPacketCounter;
+extern uint16_t seen_universe;
+extern int last_rssi;
+extern void setStatusLED(int);
+extern float fps;
+
+/*
+ * Set default config on initial boot if there is no configuration yet
+ */
+void defaultConfig() {
+    config.universe = 1;
+    config.channels = 512;
+    config.delay = 25;
+    config.hostname = "ESP-DMX-"+WiFi.macAddress().substring(9);
+    config.hostname.replace(":","");
+}
+
+/*
+ * Attempt loading the configuration from a file in SPIFFS
+ */
+bool loadConfig() {
+  Serial.println("loadConfig: Loading config from /config.json");
+
+  File configFile = SPIFFS.open("/config.json", "r");
+  if (!configFile) {
+    Serial.println("loadConfig: Failed to open config file /config.json");
+    return false;
+  }
+
+  size_t size = configFile.size();
+  if (size > 1024) {
+    Serial.println("loadConfig: Config file size is too large");
+    return false;
+  }
+
+  std::unique_ptr<char[]> buf(new char[size]);
+  configFile.readBytes(buf.get(), size);
+  configFile.close();
+  char * bp = &buf[0];
+//  Serial.print("config file:");Serial.println(bp);
+
+  DynamicJsonDocument jsonDoc(1024);
+  DeserializationError error = deserializeJson(jsonDoc, buf.get());
+  if (error) {
+    Serial.println("loadConfig: Failed to parse config file");
+    return false;
+  }
+  if (jsonDoc.containsKey("hostname")) { String hn = jsonDoc["hostname"]; config.hostname = hn; };
+  if (jsonDoc.containsKey("universe")) { config.universe = jsonDoc["universe"]; } 
+  if (jsonDoc.containsKey("channels")) { config.channels = jsonDoc["channels"]; } 
+  if (jsonDoc.containsKey("delay")) { config.delay = jsonDoc["delay"]; } 
+  return true;
+}
+
+/*
+ * Attempt saving the configuration to a file in SPIFFS
+ */
+bool saveConfig() {
+  Serial.println("saveConfig: ");
+  DynamicJsonDocument jsonDoc(500);
+
+  jsonDoc["hostname"] = config.hostname;
+  jsonDoc["universe"] = config.universe;
+  jsonDoc["channels"] = config.channels;
+  jsonDoc["delay"] = config.delay;
+
+  File configFile = SPIFFS.open("/config.json", "w");
+  if (!configFile) {
+    Serial.println("saveConfig: Failed to open config file for writing");
+    return false;
+  }
+  else {
+    Serial.println("saveConfig: Writing to config file /config.json");
+    serializeJson(jsonDoc, configFile);
+    configFile.close();
+    return true;
+  }
+}
+
+/*
+ * Restart the device after a sucessful upload of new firmware via webinterfac
+ */
+void ota_restart() {
+    Serial.println("HTTP: ota_restart");
+    Serial.print("hasError: ");
+    Serial.println((Update.hasError()) ? "FAIL" : "OK");
+
+    String page = "<head><title>"+config.hostname+"</title><meta http-equiv='refresh' content='10;url=/'></head>\n";
+    page += "<body><h1 style='text-align: center;'>"+config.hostname+"</h1>\n";
+  
+    page += "<table style='width:100%;border: 1px solid black; text-align: center;'>\n";
+    page += "<tr><td><a href=/>Home<a></td><td><a href=/config>Config</a></td><td><a href=/restart>Restart</a></td><td><b>Update</b></td></tr>\n";
+    page += "</table>\n";
+
+    page += "<p><h1>Update complete - rebooting</h1>";
+    page += "<p>hasError: ";
+    page += Update.hasError() ? "FAIL" : "OK";
+    
+    webServer.sendHeader("Connection", "close");
+    webServer.sendHeader("Access-Control-Allow-Origin", "*");
+    webServer.send(200, "text/html", page+http_foot());
+
+//    webServer.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+
+    delay(1000);
+    ESP.restart();
+}
+
+/*
+ * Upload a firmware update via webinterface
+ */
+void ota_upload() {
+    Serial.print("HTTP: ota_upload ");
+    
+    HTTPUpload& upload = webServer.upload();
+    if (upload.status == UPLOAD_FILE_START) {
+        Serial.setDebugOutput(true);
+        WiFiUDP::stopAll();
+        uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
+        Serial.printf("Upload start, filename: %s, space available: %u\n", upload.filename.c_str(),maxSketchSpace);
+        if (!Update.begin(maxSketchSpace)) { //start with max available size
+            Update.printError(Serial);
+        }
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+        Serial.print("Upload write, totalSize=");
+        Serial.println(upload.totalSize);
+        if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+            Update.printError(Serial);
+        }
+    } else if (upload.status == UPLOAD_FILE_END) {
+        Serial.print("Upload end"); 
+        if (Update.end(true)) { //true to set the size to the current progress
+            Serial.printf(" Success, totalSize=%u\n", upload.totalSize);
+        } else {
+            Serial.print(" Error:");
+            Update.printError(Serial);
+        }
+        Serial.setDebugOutput(false);
+    }
+    yield();
+}
+
+/*
+ * Display the 404 error message for unknown URLs
+ */
+void http_error404() {
+    Serial.println("HTTP: Error-404");
+    String message = "Error 404: File Not Found\n\n";
+    message += "URL: ";
+    message += webServer.uri();
+    message += "\nMethod: ";
+    message += (webServer.method() == HTTP_GET) ? "GET" : "POST";
+    message += "\nArguments: ";
+    message += webServer.args();
+    message += "\n";
+    for (uint8_t i = 0; i < webServer.args(); i++) {
+        message += " " + webServer.argName(i) + ": " + webServer.arg(i) + "\n";
+    }
+    webServer.send(404, "text/plain", message);
+}
+
+char* IP2String (IPAddress ip) {
+    static char a[16];
+    sprintf(a, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+    return a;
+}
+
+/*
+ * Assemble the common footer string
+ */
+String http_foot() {
+    String foot = "<p><hr style='width:100%; height:1px; border:none; color:red; background:black;'>";
+    foot += "<p>ESP-DMX by Markus Baertschi, <a href=https://github.com/markusb>github.com/markusb/esp-dmx</a>\n";
+    foot += "</body>\n";
+    return foot;
+}
+
+/*
+ * Assemble the main index and status page
+ */
+void http_index() {
+    Serial.println("HTTP: Sending index page");
+  
+    String page = "<head><title>"+config.hostname+"</title></head>\n";
+//    page += "<body><img src=/dmx512.png stype='width: 50px;'><h1 style='text-align: center;'>"+config.hostname+"</h1>\n";
+    page += "<body><h1 style='text-align: center;'>"+config.hostname+"</h1>\n";
+  
+    page += "<table style='width:100%;border: 1px solid black; text-align: center;'>\n";
+    page += "<tr><td><b>Home</b></td><td><a href=/config>Config</a></td><td><a href=/restart>Restart</a></td><td><a href=/update>Update</a></td></tr>\n";
+    page += "</table>\n";
+  
+    page += "<p><table style='width:100%;border: 1px solid black;'>\n";
+    page += "<tr><td>Hostname:</td><td>"+config.hostname+"</td></tr>\n";
+    page += "<tr><td>Wifi SSID:</td><td>"+WiFi.SSID()+"</td></tr>\n";
+    page += "<tr><td>RSSI (signal strngth):</td><td>"; page += last_rssi; page += "</td></tr>\n";
+    page += "<tr><td>IP:</td><td>"; page += IP2String(WiFi.localIP()); page += "</td></tr>\n";
+    page += "<tr><td>ESP-DMX build:</td><td>"; page += version; page += "</td></tr>\n";
+    page += "<tr><td>Universe:</td><td>";
+    page += config.universe;
+    page += "</td></tr>\n<tr><td>Channels:</td><td>";
+    page += config.channels;
+    page += "</td></tr>\n";
+    page += "<tr><td>Delay:</td><td>";
+    page += "<tr><td>FPS:</td><td>";
+    page += fps;
+    page += "</td></tr>\n";
+    page += "<tr><td>DMX packets seen:</td><td>"; page += dmxPacketCounter; page += " (universe:";
+    page += seen_universe; page += ")</td></tr>\n";
+    page += "<tr><td>DMX packets processed:</td><td>"; page += dmxUMatchCounter; page += "</td></tr>\n";
+    page += "<tr><td>Status:</td><td>"; page += status_text[status], page += "</td></tr>\n";
+    page += "</table>\n";
+    page += http_foot();
+    
+    webServer.send(200, "text/html", page);
+}
+
+/*
+ * Assemble the configuration form
+ * After saving the form is displayed again with the mention 'Configuration saved'
+ * and allows to chnage the configuration again
+ */
+void http_config() {
+    Serial.print("\tHTTP: Config form");
+
+    String head = "<head><title>"+config.hostname+"</title></head>\n";
+    
+    String body = "<body><h1 style='text-align: center;'>"+config.hostname+"</h1>\n";
+    body += "<table style='width:100%;border: 1px solid black; text-align: center;'>\n";
+    body += "<tr><td><a href=/>Home<a></td><td><b>Config</b></td><td><a href=/restart>Restart</a></td><td><a href=/update>Update</a></td></tr>\n";
+    body += "</table>\n";
+
+    String foot = http_foot();
+
+
+    if (webServer.method() == HTTP_GET) {
+        Serial.println("GET");
+    }
+    if (webServer.method() == HTTP_POST) {
+        Serial.println("POST (save)");
+    
+        String message = "HTTP POST Request: ";
+        for (uint8_t i = 0; i < webServer.args(); i++) {
+            message += " " + webServer.argName(i) + ": " + webServer.arg(i) + "\n";
+            if (webServer.argName(i) == "hostname") { config.hostname = webServer.arg(i); }
+            if (webServer.argName(i) == "universe") { config.universe = webServer.arg(i).toInt(); }
+            if (webServer.argName(i) == "channels") { config.channels = webServer.arg(i).toInt(); }
+            if (webServer.argName(i) == "delay") { config.delay = webServer.arg(i).toInt(); }
+        }
+        saveConfig();
+        Serial.println(message);
+        
+        body += "<p><div style='color:red;font-weight:bold;'>Configuration saved</div><p>\n";
+    }
+
+    body += "<form id=\"config\" method=\"post\" action=\"/config\">";
+    body += "<p><table style='width:100%;'>\n";
+    body += "<tr><td>Hostname:</td><td><input type='text' id='hostname' name='hostname' value='"+config.hostname+"' required></td></tr>\n";
+    body += "<tr><td>Universe:</td><td><input type='text' id='universe' name='universe' value='";
+    body += config.universe;
+    body += "' required></td></tr>\n";
+    body += "<tr><td>Channels:</td><td><input type='text' id='channels' name='channels' value='";
+    body += +config.channels;
+    body += "' required></td></tr>\n";
+    body += "<tr><td>Delay:</td><td><input type='text' id='delay' name='delay' value='";
+    body += config.delay;
+    body += "' required></td></tr>";
+    body += "<tr><td></td><td><button type='submit'>Save Config</button></td></tr>\n";
+    body += "</table></form>\n";
+
+    webServer.send(200, "text/html", head+body+foot);
+}
+
+/*
+ * Assemble the restart form
+ * 
+ * A get request display the form, a POST request restarts the device
+ */
+void http_restart () {
+    Serial.print("HTTP: Restart page ");
+    
+    String head = "<head><title>"+config.hostname+"</title></head>\n";
+    
+    String body = "<body><h1 style='text-align: center;'>"+config.hostname+"</h1>\n";
+    body += "<p><table style='width:100%;border: 1px solid black; text-align: center;'>\n";
+    body += "<tr><td><a href=/>Home<a></td><td><a href=/config>Config</a></td><td><b>Restart</b></td><td><a href=/update>Update</a></td></tr>\n";
+    body += "</table><p>\n";
+
+    String foot = http_foot();
+
+    if (webServer.method() == HTTP_GET) {
+        Serial.println("GET (confirmation form)");
+        body += "<form id='reset' method='post' action='/restart'>\n";
+        body += "<p><table style='width:100%;text-align: center;'><tr><td><button type='submit'>Confirm Restart</button></td></tr></table></form><p>\n";
+    }
+    if (webServer.method() == HTTP_POST) {
+        Serial.println("POST (reset)");
+        Serial.println("Resetting device");
+        setStatusLED(0x0ff0000); // red
+        head = "<head><title>"+config.hostname+"</title><meta http-equiv='refresh' content='15;url=/'></head>\n";
+        body += "<h1 style='align: center;'>Resetting ...</h1><p>\n";
+        webServer.send(200, "text/html", head+body+foot);
+        
+        delay(5000);
+        ESP.restart();
+    }
+    
+    webServer.send(200, "text/html", head+body+foot);
+}
+
+/*
+ * Display the firmware update form
+ */
+void http_update() {
+    Serial.println("HTTP: Sending update form");
+
+    String head = "<head><title>"+config.hostname+"</title></head>\n";
+    
+    String body = "<body><h1 style='text-align: center;'>"+config.hostname+"</h1>\n";
+    body += "<table style='width:100%;border: 1px solid black; text-align: center;'>\n";
+    body += "<tr><td><a href=/>Home<a></td><td><a href=/config>Config</a></td><td><a href=/restart>Restart</a></td><td><b>Update</b></td></tr>\n";
+    body += "</table>\n";
+
+    body += "<form id=\"config\" method=\"post\" action=\"/update\" enctype='multipart/form-data'><p><table>\n";
+    body += "<tr><td>Current firmware:</td><td>"; body += version; body += "</td></tr>\n";
+    body += "<tr><td>New firmware binary:</td><td><input type=\"file\" id=\"update\" name=\"update\" required></td></tr>\n";
+    body += "<tr><td></td><td><button type=\"submit\">Update</button></td></tr>\n";
+    body += "</table><p>\n";
+
+    String foot = http_foot();
+
+    webServer.send(200, "text/html", head+body+foot);
+}
+
+/*
+ * Sends the favicon
+ */
+void http_favicon () {
+    Serial.println("\tSend Favicon");
+    webServer.send_P(200, favicon_ctype, favicon_ico, favicon_ico_len);
+}
+
+/*
+ * Sends the dmx512 image
+ */
+void http_dmx512png () {
+    Serial.println("\tSend DMX512png");
+    webServer.send_P(200, dmx512_png_ctype, dmx512_png, dmx512_png_len);
+}

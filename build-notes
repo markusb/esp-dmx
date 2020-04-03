@@ -1,0 +1,18 @@
+
+Random notes for building this
+
+To convert binary stuff into c constats I use xxd:
+ 
+    xxd --include dmx512.png > dmx512.h
+
+Some some minor manual massaging is still required.
+The definition must read:
+
+    const char PROGMEM dmx512_png[] = {
+
+I also add the content type as variable to the same file.
+
+    const char PROGMEM dmx512_png_ctype[] = "image/png";
+
+
+
