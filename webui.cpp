@@ -115,9 +115,11 @@ void ota_restart() {
     page += "<tr><td><a href=/>Home<a></td><td><a href=/config>Config</a></td><td><a href=/restart>Restart</a></td><td><b>Update</b></td></tr>\n";
     page += "</table>\n";
 
-    page += "<p><h1>Update complete - rebooting</h1>";
-    page += "<p>hasError: ";
-    page += Update.hasError() ? "FAIL" : "OK";
+    if (Update.hasError()) {
+        page += "<p>Error: "+Update.getError();
+    } else {
+        page += "<p><h1>Update complete - rebooting</h1>";
+    }
     
     webServer.sendHeader("Connection", "close");
     webServer.sendHeader("Access-Control-Allow-Origin", "*");
@@ -132,30 +134,27 @@ void ota_restart() {
 /*
  * Upload a firmware update via webinterface
  */
-void ota_upload() {
-    Serial.print("HTTP: ota_upload ");
-    
+void ota_upload() {    
     HTTPUpload& upload = webServer.upload();
     if (upload.status == UPLOAD_FILE_START) {
         Serial.setDebugOutput(true);
         WiFiUDP::stopAll();
         uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
-        Serial.printf("Upload start, filename: %s, space available: %u\n", upload.filename.c_str(),maxSketchSpace);
+        Serial.printf("ota_upload: Upload start, filename: %s, space available: %u  ", upload.filename.c_str(),maxSketchSpace);
         if (!Update.begin(maxSketchSpace)) { //start with max available size
             Update.printError(Serial);
         }
     } else if (upload.status == UPLOAD_FILE_WRITE) {
-        Serial.print("Upload write, totalSize=");
-        Serial.println(upload.totalSize);
+        Serial.print(".");
         if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
             Update.printError(Serial);
         }
     } else if (upload.status == UPLOAD_FILE_END) {
-        Serial.print("Upload end"); 
+        Serial.println("ota_upload: Upload end");
         if (Update.end(true)) { //true to set the size to the current progress
-            Serial.printf(" Success, totalSize=%u\n", upload.totalSize);
+            Serial.printf("ota_upload: Upload Success, totalSize=%u\n", upload.totalSize);
         } else {
-            Serial.print(" Error:");
+            Serial.print("ota_upload: Error:");
             Update.printError(Serial);
         }
         Serial.setDebugOutput(false);

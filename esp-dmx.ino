@@ -134,10 +134,10 @@ void setStatusLED(int color) {
 void onDmxPacket(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t * data) {
   seen_universe = universe;
   dmxPacketCounter++;
+  tic_artnet = millis();
 
   // print some feedback
-  tic_artnet = millis();
-  if ((millis() - tic_fps) > 1000 && frameCounter > 100) {
+/*  if ((millis() - tic_fps) > 1000 && frameCounter > 100) {
     // don't estimate the FPS too frequently
     fps = 1000 * frameCounter / (millis() - tic_fps);
     tic_fps = millis();
@@ -148,6 +148,7 @@ void onDmxPacket(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t *
     Serial.print(fps);
     Serial.println();
   }
+*/
 
   if (universe == config.universe) {
     // If the universe matches copy the data from the UDP packet over to the global universe buffer
