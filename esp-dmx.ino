@@ -163,8 +163,7 @@ void onDmxPacket(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t *
 
 #define ART_POLLREPLY 0x2100
 void sendArtPollReply() {
-    Serial.println("sendArtPollReply:");
-    
+//    Serial.println("sendArtPollReply:");  
 }
 
 /*
@@ -324,25 +323,8 @@ void loop() {
         if ((millis() - tic_status) > 2000) {
             last_rssi = WiFi.RSSI();
             tic_status=millis();
-            Serial.printf("ESP-DMX loop: status = %s, RSSI=%i, dmxPacket=%d (u=%d), dmxUMatch=%d, u=%d, dmx sent=%d, looplat=%d\n",
-                           status_text[status],last_rssi,dmxPacketCounter,seen_universe,dmxUMatchCounter,config.universe,frameCounter,last_looplat);
-/*            Serial.print("ESP-DMX loop: status = ");
-            Serial.print(status_text[status]);
-            Serial.print(", RSSI = ");
-            Serial.print(last_rssi);
-            Serial.print(", dmxPacket = ");
-            Serial.print(dmxPacketCounter);
-            Serial.print(" (u=");
-            Serial.print(seen_universe);
-            Serial.print("), dmxUMatch = ");
-            Serial.print(dmxUMatchCounter);
-            Serial.print(", u=");
-            Serial.print(config.universe);
-            Serial.print(", dmx sent=");
-            Serial.print(frameCounter);
-            Serial.print(", looplat=");
-            Serial.print(last_looplat);
-            Serial.println(); */
+//            Serial.printf("ESP-DMX loop: status = %s, RSSI=%i, dmxPacket=%d (u=%d), dmxUMatch=%d, u=%d, dmx sent=%d, looplat=%d\n",
+//                           status_text[status],last_rssi,dmxPacketCounter,seen_universe,dmxUMatchCounter,config.universe,frameCounter,last_looplat);
         }      
         if ((millis() - tic_web) < 2000) {
             //

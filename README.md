@@ -42,7 +42,7 @@ Wherever there is activity on the web interface (configuration, monitoring), the
          Wemos D1:
                             +-----+ 
                        Rst  +  W  +  Tx
-                        A0  +  E  +  Rx
+          NTC <-        A0  +  E  +  Rx
                  D0/GPIO16  +  M  +  D1/GPIO5   -> RS422 En
         LED_B <- D5/GPIO14  +  O  +  D2/GPIO4 
         LED_R <- D6/GPIO12  +  S  +  D3/GPIO0*

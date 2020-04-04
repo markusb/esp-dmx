@@ -1,0 +1,157 @@
+1 ID[8] Int8 - Array of 8 characters, the final character is a null termination.
+  Value = ‘A’ ‘r’ ‘t’ ‘-‘ ‘N’ ‘e’ ‘t’ 0x00
+2 OpCode Int16 - OpPollReply Transmitted low byte first.
+3 IP Address[4] Int8 - Array containing the Node’s IP address. First array entry
+  is most significant byte of address. When binding is implemented, bound nodes may
+  share the root node’s IP Address and the BindIndex is used to differentiate the nodes.
+4 Port Int16 - The Port is always 0x1936 Transmitted low byte first.
+5 VersInfoH Int8 - High byte of Node’s firmware revision number. The Controller should
+  only use this field to decide if a firmware update should proceed. The convention is
+  that a higher number is a more recent release of firmware.
+6 VersInfoL Int8 - Low byte of Node’s firmware revisionnumber.
+7 NetSwitch Int8 - Bits 14-8 of the 15 bit Port-Address are encoded into the bottom 7 bits of this field.
+  This is used in combination with SubSwitch and SwIn[] or SwOut[] to produce the full universe address.
+8 SubSwitch Int8 - Bits 7-4 of the 15 bit Port-Address are encoded into the bottom 4 bits of this field.
+  This is used in combination with NetSwitch and SwIn[] or SwOut[] to produce the full universe address.
+9 OemHi Int8 - The high byte of the Oem value.
+10 Oem Int8 - The low byte of the Oem value. The Oem word describes the equipment
+  vendor and the feature set available. Bit 15 high indicates extended features available.
+  Current registered codes are defined in
+11 Ubea Version Int8 - This field contains the firmware version of the User Bios Extension Area (UBEA). If the
+   UBEA is not programmed, this field contains zero.
+12 Status1 Int8 - General Status register containing bit fields as follows.
+   7-6 Indicator state.
+     00 Indicator state unknown.
+     01 Indicators in Locate / Identify Mode.
+     10 Indicators in Mute Mode.
+     11 Indicators in Normal Mode.
+   5-4 Port-Address Programming Authority
+     00 Port-Address Programming Authority unknown.
+     01 All Port-Address set by front panel controls.
+     10 All or part of Port-Address programmed by network or Web browser.
+     11 Not used.
+   3 Not implemented, transmit as zero, receivers do not test.
+   2 0 = Normal firmware boot (from flash). Nodes that do not support dual boot, clear this field to zero.
+     1 = Booted from ROM.
+   1 0 = Not capable of Remote Device Management (RDM).
+     1 = Capable of Remote Device Management (RDM).
+   0 0 = UBEA not present or corrupt
+     1 = UBEA present
+13 EstaManLo Int8 - The ESTA manufacturer code. These codes are used to represent equipment
+   manufacturer. They are assigned by ESTA. This field can be interpreted as two ASCII
+   bytes representing the manufacturer initials.
+14 EstaManHi Int8 - Hi byte of above
+15 ShortName [18] Int8 - The array represents a null terminated short
+   name for the Node. The Controller uses the ArtAddress packet to program this string.
+   Max length is 17 characters plus the null. This is a fixed length field, although the
+   string it contains can be shorter than the field.
+16 LongName [64] Int8 - The array represents a null terminated long
+   name for the Node. The Controller uses the ArtAddress packet to program this string.
+   Max length is 63 characters plus the null. This is a fixed length field, although the
+   string it contains can be shorter than the field.
+17 NodeReport [64] Int8 - The array is a textual report of the Node’s
+   operating status or operational errors. It is primarily intended for ‘engineering’ data 
+   rather than ‘end user’ data. The field is
+   formatted as: “#xxxx [yyyy..] zzzzz…” xxxx is a hex status code as defined in Table 3.
+   yyyy is a decimal counter that increments every time the Node sends an ArtPollResponse.
+   This allows the controller to monitor event changes in the Node.
+   zzzz is an English text string defining the status.
+   This is a fixed length field, although the string it contains can be shorter than the field.
+18 NumPortsHi Int8 - The high byte of the word describing the number of input or output ports. The high
+   byte is for future expansion and is currently zero.
+19 NumPortsLo Int8 - The low byte of the word describing the number of input or output ports. If number
+   of inputs is not equal to number of outputs, the largest value is taken. Zero is a legal
+   value if no input or output ports are implemented. The maximum value is 4.
+   Nodes can ignore this field as the information is implicit in PortTypes[].
+20 PortTypes [4] Int8 - This array defines the operation and protocol of each channel. (A product with 4
+   inputs and 4 outputs would report 0xc0,0xc0, 0xc0, 0xc0). The array length is fixed,
+   independent of the number of inputs or outputs physically available on the Node.
+   7 Set is this channel can output data from the Art-Net Network.
+   6 Set if this channel can input onto the Art-Net Network.
+   5-0 000000 = DMX512
+       000001 = MIDI
+       000010 = Avab
+       000011 = Colortran CMX
+       000100 = ADB 62.5
+       000101 = Art-Net
+21 GoodInput [4] Int8 - This array defines input status of the node.
+   7 Set – Data received.
+   6 Set – Channel includes DMX512 test packets.
+   5 Set – Channel includes DMX512 SIP’s.
+   4 Set – Channel includes DMX512 text packets.
+   3 Set – Input is disabled.
+   2 Set – Receive errors detected.
+   1-0 Unused and transmitted as zero.
+22 GoodOutput [4] Int8 - This array defines output status of the node.
+   7 Set – Data is being transmitted.
+   6 Set – Channel includes DMX512 test packets.
+   5 Set – Channel includes DMX512 SIP’s.
+   4 Set – Channel includes DMX512 text packets.
+   3 Set – Output is merging ArtNet data.
+   2 Set – DMX output short detected on powerup
+   1 Set – Merge Mode is LTP.
+   0 Set – Output is selected to transmit sACN.
+   Clr – Output is selected to transmit Art-Net.
+23 SwIn [4] Int8 - Bits 3-0 of the 15 bit Port-Address for each
+   of the 4 possible input ports are encoded into the low nibble.
+24 SwOut [4] Int8 - Bits 3-0 of the 15 bit Port-Address for each
+   of the 4 possible output ports are encoded into the low nibble.
+25 SwVideo Int8 - Set to 00 when video display is showing local
+   data. Set to 01 when video is showing ethernet data. The field is now deprecated
+26 SwMacro Int8 - If the Node supports macro key inputs, this
+   byte represents the trigger values. The Node is responsible for ‘debouncing’ inputs. When
+   the ArtPollReply is set to transmit automatically, (TalkToMe Bit 1), the
+   ArtPollReply will be sent on both key down and key up events. However, the Controller
+   should not assume that only one bit position has changed.
+   The Macro inputs are used for remote event triggering or cueing.
+   Bit fields are active high.
+   7 Set – Macro 8 active.
+   6 Set – Macro 7 active.
+   5 Set – Macro 6 active.
+   4 Set – Macro 5 active.
+   3 Set – Macro 4 active.
+   2 Set – Macro 3 active.
+   1 Set – Macro 2 active.
+   0 Set – Macro 1 active.
+27 SwRemote Int8 - If the Node supports remote trigger inputs,
+   this byte represents the trigger values. The Node is responsible for ‘debouncing’ inputs.
+   When the ArtPollReply is set to transmit automatically, (TalkToMe Bit 1), the
+   ArtPollReply will be sent on both key down and key up events. However, the Controller
+   should not assume that only one bit position has changed.
+   The Remote inputs are used for remote event triggering or cueing.
+   Bit fields are active high.
+   7 Set – Remote 8 active.
+   6 Set – Remote 7 active.
+   5 Set – Remote 6 active.
+   4 Set – Remote 5 active.
+   3 Set – Remote 4 active.
+   2 Set – Remote 3 active.
+   1 Set – Remote 2 active.
+   0 Set – Remote 1 active.
+28 Spare Int8 Not used, set to zero
+29 Spare Int8 Not used, set to zero
+30 Spare Int8 Not used, set to zero
+31 Style Int8 The Style code defines the equipment style of the device. See Table 4 for current Style codes.
+32 MAC Hi Int8 MAC Address Hi Byte. Set to zero if node cannot supply this information.
+33 MAC Int8 MAC Address
+34 MAC Int8 MAC Address
+35 MAC Int8 MAC Address
+36 MAC Int8 MAC Address
+37 MAC Lo Int8 MAC Address Lo Byte
+38 BindIp[4] Int8 If this unit is part of a larger or modular product, this is the IP of the root device.
+39 BindIndex Int8 This number represents the order of bound devices. A lower number means closer to
+   root device. A value of 1 means root device.
+40 Status2 Int8 
+   0 Set = Product supports web browser configuration.
+   1 Clr = Node’s IP is manually configured. 
+     Set = Node’s IP is DHCP configured.
+   2 Clr = Node is not DHCP capable. 
+     Set = Node is DHCP capable.
+   3 Clr = Node supports 8 bit Port-Address (ArtNet II). 
+     Set = Node supports 15 bit Port-Address (Art-Net 3 or 4).
+   4 Clr = Node not able to switch between ArtNet and sACN.
+     Set = Node is able to switch between Art-Net and sACN.
+   5 Clr = Not squawking.
+     Set = squawking.
+41 Filler 26 x 8 Transmit as zero. For future expansion.
+

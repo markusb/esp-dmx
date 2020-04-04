@@ -1,0 +1,9 @@
+
+- Temperature sensor
+- Artnet pollreply
+- Improve update webinterface
+  - Display progress page immediately after pressing Update button
+
+- Lower status LED brightness
+- Set LED to red when updating
+

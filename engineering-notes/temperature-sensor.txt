@@ -1,0 +1,16 @@
+
+Objective: Measure ambient temperature between 0°C to 100°C
+           using the Wemos D1 analog port
+
+
+- The D1 analog port has an impedance of 320k to ground
+- The NTC is connected to the 3v3 supply
+
+Calculation with a 100k NTC (TTC05104)
+
+Resistance:  0°C 350k   ->  492mV
+            25°C 100k   ->  785mV
+            60°C  20k   ->  970mV
+           100°C   4.5k -> 1019mV
+
+
