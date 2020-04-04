@@ -20,6 +20,7 @@
 #include <FS.h>
 #include "webui.h"
 #include "send_break.h"
+#include "statusLED.h"
 
 #define MIN(x,y) (x<y ? x : y)
 //#define MAX(x,y) (x>y ? x : y)
@@ -106,16 +107,6 @@ Adafruit_NeoPixel statusLED = Adafruit_NeoPixel(1, PIN_NEOPIXEL, NEO_GRB);
 #define PIN_LED_G 13   // GPIO13/D7
 #define PIN_LED_R 12   // GPIO12/D6
 #endif
-
-// Color codes for LED, Format 0xrrggbb
-#define LED_OFF    0x0000000
-#define LED_RED    0x0ff0000  // Initial boot
-#define LED_YELLOW 0x0ffff00  // Setting up Wifi
-#define LED_PINK   0x0ff00ff  // Connected to wifi, ready for DMX
-#define LED_CYAN   0x000ffff  // Observing DMX, but other universe
-#define LED_GREEN  0x000ff00  // Receiving and transmitting DMX
-#define LED_BLUE   0x00000ff  // Processing webrequest
-#define LED_WHITE  0x0ffffff  // Config not found, using defaults
 
 /*
  * Set the status LED(s) to a specified color

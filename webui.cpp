@@ -13,6 +13,7 @@
 #include "webui.h"
 #include "favicon.h"
 #include "dmx512.h"
+#include "statusLED.h"
 
 extern ESP8266WebServer webServer;
 extern Config config;
@@ -108,6 +109,8 @@ void ota_restart() {
     Serial.print("hasError: ");
     Serial.println((Update.hasError()) ? "FAIL" : "OK");
 
+    setStatusLED(LED_RED);
+
     String page = "<head><title>"+config.hostname+"</title><meta http-equiv='refresh' content='10;url=/'></head>\n";
     page += "<body><h1 style='text-align: center;'>"+config.hostname+"</h1>\n";
   
@@ -139,6 +142,7 @@ void ota_upload() {
     if (upload.status == UPLOAD_FILE_START) {
         Serial.setDebugOutput(true);
         WiFiUDP::stopAll();
+        setStatusLED(LED_YELLOW);
         uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
         Serial.printf("ota_upload: Upload start, filename: %s, space available: %u  ", upload.filename.c_str(),maxSketchSpace);
         if (!Update.begin(maxSketchSpace)) { //start with max available size
