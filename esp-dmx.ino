@@ -22,6 +22,7 @@
 #include "send_break.h"
 
 #define MIN(x,y) (x<y ? x : y)
+//#define MAX(x,y) (x>y ? x : y)
 #define ENABLE_MDNS
 
 // wifi manager is optional during development as re-flashing from Arduino
@@ -61,9 +62,13 @@ unsigned long frameCounter = 0;
 unsigned long dmxUMatchCounter = 0;
 unsigned long dmxPacketCounter = 0;
 float fps = 0;
+
+//#define ANALYZEJITTER
+#ifdef ANALYZEJITTER
 #define DMXSENDHISTLEN 256
 unsigned long dmxSendHist[DMXSENDHISTLEN];
 int dmxSendIdx = 0;
+#endif
 
 // keep track of the timing
 long tic_loop = 0;   // loop timing
@@ -378,8 +383,26 @@ void loop() {
                 for (int i = 0; i < MIN(global.length, config.channels); i++) {
                     Serial1.write(global.data[i]);
                 }
+#ifdef ANALYZEJITTER                
                 dmxSendHist[dmxSendIdx++]=millis();
-                if (dmxSendIdx>=DMXSENDHISTLEN) dmxSendIdx=0;
+                if (dmxSendIdx>=DMXSENDHISTLEN) {
+                    // start new history cycle
+                    dmxSendIdx=0;
+                    // analyze history
+                    long hdiff = dmxSendHist[DMXSENDHISTLEN-1] - dmxSendHist[0]; // time between 1st and last frame
+                    long hmean = hdiff/DMXSENDHISTLEN;                           // mean time between each frame
+                    long jmean = 0;
+                    long jmax = 0;
+                    long j = 0;
+                    for (int i = 1; i<DMXSENDHISTLEN; i++) {
+                        j = dmxSendHist[i-1]+hmean - dmxSendHist[i];    // time between consecutive frames from mean time
+                        jmean += abs(j);
+                        if (j>jmax) jmax=j;
+                    }
+                    jmean = jmean/DMXSENDHISTLEN;
+                    Serial.printf("ESP-DMX jitter(ms): hdiff=%u, hmean=%u jmean=%u, jmax=%u\n",hdiff, hmean,jmean,jmax);
+                }
+#endif                    
             } else {
                 tic_looplat = millis() - tic_loop;
             }
