@@ -61,6 +61,9 @@ unsigned long frameCounter = 0;
 unsigned long dmxUMatchCounter = 0;
 unsigned long dmxPacketCounter = 0;
 float fps = 0;
+#define DMXSENDHISTLEN 256
+unsigned long dmxSendHist[DMXSENDHISTLEN];
+int dmxSendIdx = 0;
 
 // keep track of the timing
 long tic_loop = 0;   // loop timing
@@ -325,7 +328,9 @@ void loop() {
         if ((millis() - tic_status) > 2000) {
             last_rssi = WiFi.RSSI();
             tic_status=millis();
-            Serial.print("ESP-DMX loop: status = ");
+            Serial.printf("ESP-DMX loop: status = %s, RSSI=%i, dmxPacket=%d (u=%d), dmxUMatch=%d, u=%d, dmx sent=%d, looplat=%d\n",
+                           status_text[status],last_rssi,dmxPacketCounter,seen_universe,dmxUMatchCounter,config.universe,frameCounter,last_looplat);
+/*            Serial.print("ESP-DMX loop: status = ");
             Serial.print(status_text[status]);
             Serial.print(", RSSI = ");
             Serial.print(last_rssi);
@@ -341,7 +346,7 @@ void loop() {
             Serial.print(frameCounter);
             Serial.print(", looplat=");
             Serial.print(last_looplat);
-            Serial.println();
+            Serial.println(); */
         }      
         if ((millis() - tic_web) < 2000) {
             //
@@ -372,7 +377,9 @@ void loop() {
                 // send out the value of the selected channels (up to 512)
                 for (int i = 0; i < MIN(global.length, config.channels); i++) {
                     Serial1.write(global.data[i]);
-                } 
+                }
+                dmxSendHist[dmxSendIdx++]=millis();
+                if (dmxSendIdx>=DMXSENDHISTLEN) dmxSendIdx=0;
             } else {
                 tic_looplat = millis() - tic_loop;
             }
