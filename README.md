@@ -52,10 +52,10 @@ Wherever there is activity on the web interface (configuration, monitoring), the
                             +-----+ 
 
 
-            MAX485:		1 Rx      vcc 8
-			            2 RxEn   outb 7
-			            3 TxEn   outa 6
-			            4 Tx      gnd 5
+            MAX485:	1 Rx      vcc 8
+		        2 RxEn   outb 7
+		        3 TxEn   outa 6
+		        4 Tx      gnd 5
 
 There is also a schematics among the files
 
@@ -66,5 +66,5 @@ Add an Artnet PollReply so that the device is visible to Artnet controllers
 # Reference
 
 The Sketch by Robert Oosterveld http://robertoostenveld.nl/art-net-to-dmx512-with-esp8266
-has server with examples and some code.
+has served as starting point.
 
