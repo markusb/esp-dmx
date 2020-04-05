@@ -21,6 +21,7 @@
 #include "webui.h"
 #include "send_break.h"
 #include "statusLED.h"
+#include "esp-dmx.h"
 
 #define MIN(x,y) (x<y ? x : y)
 //#define MAX(x,y) (x>y ? x : y)
@@ -50,18 +51,14 @@ const char* version = &version_text[0];
 ArtnetWifi artnet;
 
 // Global universe buffer
-struct {
-    uint16_t universe;
-    uint16_t length;
-    uint8_t sequence;
-    uint8_t *data;
-} global;
+struct globalStruct global;
 
 // counters to keep track of things, display statistics
 unsigned long packetCounter = 0;
 unsigned long frameCounter = 0;
 unsigned long dmxUMatchCounter = 0;
 unsigned long dmxPacketCounter = 0;
+bool packetReceived = false;
 float fps = 0;
 
 //#define ANALYZEJITTER
@@ -150,6 +147,7 @@ void onDmxPacket(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t *
 */
 
   if (universe == config.universe) {
+    packetReceived = true;
     // If the universe matches copy the data from the UDP packet over to the global universe buffer
     tic_umatch = millis();
     dmxUMatchCounter++;
@@ -323,8 +321,8 @@ void loop() {
         if ((millis() - tic_status) > 2000) {
             last_rssi = WiFi.RSSI();
             tic_status=millis();
-//            Serial.printf("ESP-DMX loop: status = %s, RSSI=%i, dmxPacket=%d (u=%d), dmxUMatch=%d, u=%d, dmx sent=%d, looplat=%d\n",
-//                           status_text[status],last_rssi,dmxPacketCounter,seen_universe,dmxUMatchCounter,config.universe,frameCounter,last_looplat);
+            Serial.printf("ESP-DMX loop: status = %s, RSSI=%i, dmxPacket=%d (u=%d), dmxUMatch=%d, u=%d, dmx sent=%d, looplat=%d\n",
+                           status_text[status],last_rssi,dmxPacketCounter,seen_universe,dmxUMatchCounter,config.universe,frameCounter,last_looplat);
         }      
         if ((millis() - tic_web) < 2000) {
             //
@@ -345,8 +343,9 @@ void loop() {
             //
             // Send frame at configured framerate
             //
-            if ((millis() - tic_loop) > config.delay) {
+            if (packetReceived || ((millis() - tic_loop) > config.delay)) {
                 // this section gets executed at a maximum rate of around 40Hz
+                packetReceived = false;
                 tic_loop = millis();
                 last_looplat = tic_looplat;
                 frameCounter++;

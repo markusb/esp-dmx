@@ -14,6 +14,7 @@
 #include "favicon.h"
 #include "dmx512.h"
 #include "statusLED.h"
+#include "esp-dmx.h"
 
 extern ESP8266WebServer webServer;
 extern Config config;
@@ -27,6 +28,7 @@ extern uint16_t seen_universe;
 extern int last_rssi;
 extern void setStatusLED(int);
 extern float fps;
+extern globalStruct global;
 
 /*
  * Set default config on initial boot if there is no configuration yet
@@ -221,18 +223,14 @@ void http_index() {
     page += "<tr><td>RSSI (signal strngth):</td><td>"; page += last_rssi; page += "</td></tr>\n";
     page += "<tr><td>IP:</td><td>"; page += IP2String(WiFi.localIP()); page += "</td></tr>\n";
     page += "<tr><td>ESP-DMX build:</td><td>"; page += version; page += "</td></tr>\n";
-    page += "<tr><td>Universe:</td><td>";
-    page += config.universe;
-    page += "</td></tr>\n<tr><td>Channels:</td><td>";
-    page += config.channels;
-    page += "</td></tr>\n";
-    page += "<tr><td>Delay:</td><td>";
-    page += "<tr><td>FPS:</td><td>";
-    page += fps;
-    page += "</td></tr>\n";
+    page += "<tr><td>Universe:</td><td>"; page += config.universe; page += "</td></tr>\n";
+    page += "<tr><td>Channels:</td><td>"; page += config.channels; page += "</td></tr>\n";
+    page += "<tr><td>Delay:</td><td>"; page += config.delay; page += "</td></tr>\n";
+    page += "<tr><td>FPS:</td><td>"; page += fps; page += "</td></tr>\n";
     page += "<tr><td>DMX packets seen:</td><td>"; page += dmxPacketCounter; page += " (universe:";
     page += seen_universe; page += ")</td></tr>\n";
     page += "<tr><td>DMX packets processed:</td><td>"; page += dmxUMatchCounter; page += "</td></tr>\n";
+    page += "<tr><td>DMX packet length:/td><td>"; page += global.length; page += "</td></tr>\n";
     page += "<tr><td>Status:</td><td>"; page += status_text[status], page += "</td></tr>\n";
     page += "</table>\n";
     page += http_foot();
