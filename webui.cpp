@@ -227,10 +227,10 @@ void http_index() {
     page += "<tr><td>Channels:</td><td>"; page += config.channels; page += "</td></tr>\n";
     page += "<tr><td>Delay:</td><td>"; page += config.delay; page += "</td></tr>\n";
     page += "<tr><td>FPS:</td><td>"; page += fps; page += "</td></tr>\n";
-    page += "<tr><td>DMX packets seen:</td><td>"; page += dmxPacketCounter; page += " (universe:";
+    page += "<tr><td>Artnet packets seen:</td><td>"; page += dmxPacketCounter; page += " (universe:";
     page += seen_universe; page += ")</td></tr>\n";
-    page += "<tr><td>DMX packets processed:</td><td>"; page += dmxUMatchCounter; page += "</td></tr>\n";
-    page += "<tr><td>DMX packet length:/td><td>"; page += global.length; page += "</td></tr>\n";
+    page += "<tr><td>Artnet packets processed:</td><td>"; page += dmxUMatchCounter; page += "</td></tr>\n";
+    page += "<tr><td>Artnet packet length:</td><td>"; page += global.length; page += " (channels)</td></tr>\n";
     page += "<tr><td>Status:</td><td>"; page += status_text[status], page += "</td></tr>\n";
     page += "</table>\n";
     page += http_foot();
