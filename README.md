@@ -56,12 +56,19 @@ Wherever there is activity on the web interface (configuration, monitoring), the
                             +-----+ 
 
 
-            MAX485:	1 Rx      vcc 8
-		        2 RxEn   outb 7
-		        3 TxEn   outa 6
-		        4 Tx      gnd 5
+            MAX485:	1 Rx      vcc 8  -> Wemos D1 3V3 power
+		        2 RxEn   outb 7  -> DMX fixture
+	 Wemod D1 D1 <- 3 TxEn   outa 6  -> DMX fixture
+	 Wemod D1 D4 <- 4 Tx      gnd 5  -> Wemos D1 Gnd
 
-There is also a schematics among the files
+There is a schematic diagram and a wriring example among the files.
+
+Some remarks:
+
+- There is a prototype board for the D1 on which the Max485 fits nicely
+- I don't use a 120 Ohm termination resistor as it is not necessary with the short
+  cable length within the fixture itself and would require to be disconnected if
+  the fixture cabled conventionally.
 
 # ToDo
 
