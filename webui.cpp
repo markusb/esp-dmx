@@ -8,6 +8,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <ESP8266WebServer.h>
+#include <WiFiManager.h> 
 #include <WiFiUdp.h>
 #include <FS.h>
 #include "webui.h"
@@ -243,7 +244,12 @@ void http_index() {
  * After saving the form is displayed again with the mention 'Configuration saved'
  * and allows to chnage the configuration again
  */
+#define POST_REQUEST_SAVE 1
+#define POST_REQUEST_DEFAULTS 2
+
 void http_config() {
+    int post_request = 0;
+    
     Serial.print("\tHTTP: Config form");
 
     String head = "<head><title>"+config.hostname+"</title></head>\n";
@@ -268,30 +274,48 @@ void http_config() {
             if (webServer.argName(i) == "hostname") { config.hostname = webServer.arg(i); }
             if (webServer.argName(i) == "universe") { config.universe = webServer.arg(i).toInt(); }
             if (webServer.argName(i) == "channels") { config.channels = webServer.arg(i).toInt(); }
-            if (webServer.argName(i) == "delay") { config.delay = webServer.arg(i).toInt(); }
+            if (webServer.argName(i) == "delay")    { config.delay = webServer.arg(i).toInt(); }
+            if (webServer.argName(i) == "save")     { post_request = POST_REQUEST_SAVE; Serial.println("http_config: save"); }
+            if (webServer.argName(i) == "defaults") { post_request = POST_REQUEST_DEFAULTS; Serial.println("http_config: defaults"); }
         }
-        saveConfig();
-        Serial.println(message);
+        if (post_request == POST_REQUEST_SAVE) {
+             saveConfig();
+             Serial.println(message);
         
-        body += "<p><div style='color:red;font-weight:bold;'>Configuration saved</div><p>\n";
+             body += "<p><div style='color:red;font-weight:bold;'>Configuration saved</div><p>\n";
+        }
+        if (post_request == POST_REQUEST_DEFAULTS) {
+             body += "<p><div style='color:red;font-weight:bold;'>Resetting to defaults ... Rebooting !</div><p>\n";          
+        }
     }
 
-    body += "<form id=\"config\" method=\"post\" action=\"/config\">";
-    body += "<p><table style='width:100%;'>\n";
-    body += "<tr><td>Hostname:</td><td><input type='text' id='hostname' name='hostname' value='"+config.hostname+"' required></td></tr>\n";
-    body += "<tr><td>Universe:</td><td><input type='text' id='universe' name='universe' value='";
-    body += config.universe;
-    body += "' required></td></tr>\n";
-    body += "<tr><td>Channels:</td><td><input type='text' id='channels' name='channels' value='";
-    body += +config.channels;
-    body += "' required></td></tr>\n";
-    body += "<tr><td>Delay:</td><td><input type='text' id='delay' name='delay' value='";
-    body += config.delay;
-    body += "' required></td></tr>";
-    body += "<tr><td></td><td><button type='submit'>Save Config</button></td></tr>\n";
-    body += "</table></form>\n";
-
+    if (post_request != POST_REQUEST_DEFAULTS) {
+        body += "<form id='config' method='post' action='/config'>";
+        body += "<p><table style='width:100%;'>\n";
+        body += "<tr><td>Hostname:</td><td><input type='text' id='hostname' name='hostname' value='"+config.hostname+"' required></td></tr>\n";
+        body += "<tr><td>Universe configured:</td><td><input type='text' id='universe' name='universe' value='";
+        body += config.universe;
+        body += "' required></td></tr>\n";
+        body += "<tr><td>Channels configured:</td><td><input type='text' id='channels' name='channels' value='";
+        body += +config.channels;
+        body += "' required></td></tr>\n";
+        body += "<tr><td>Delay configured:</td><td><input type='text' id='delay' name='delay' value='";
+        body += config.delay;
+        body += "' required></td></tr>";
+        body += "<tr><td></td><td><button name='save' type='submit'>Save Config</button>\n";
+        body += "<p><button name='defaults' type='submit'>Reset to defaults</button> (including wifi)</td></tr>\n";
+        body += "</table></form>\n";
+    }
     webServer.send(200, "text/html", head+body+foot);
+
+    if (post_request == POST_REQUEST_DEFAULTS) {
+        defaultConfig();
+        saveConfig();
+        WiFiManager wifiManager;
+        wifiManager.resetSettings();
+        delay(2000);
+        ESP.restart();
+    }
 }
 
 /*
