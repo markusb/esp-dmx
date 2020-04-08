@@ -15,7 +15,8 @@
 #include <WiFiManager.h>         // https://github.com/tzapu/WiFiManager
 #include <ESP8266mDNS.h>         // For zeroconf
 #include <WiFiClient.h>
-#include <ArtnetWifi.h>          // https://github.com/rstephan/ArtnetWifi
+// #include <ArtnetWifi.h>          // https://github.com/rstephan/ArtnetWifi
+#include <ArtnetnodeWifi.h>          // https://github.com/rstephan/ArtnetnodeWifi
 #include <Adafruit_NeoPixel.h>
 #include <FS.h>
 #include "webui.h"
@@ -48,7 +49,7 @@ const char version_text[] = { BUILD_YEAR,BUILD_MONTH,BUILD_DAY,'-',BUILD_TIME,'\
 const char* version = &version_text[0];
 
 // Artnet settings
-ArtnetWifi artnet;
+ArtnetnodeWifi artnetnode;
 
 // Global universe buffer
 struct globalStruct global;
@@ -127,7 +128,7 @@ void setStatusLED(int color) {
  * for our device we copy the dmx data to our dmx buffer
  *
  */
-void onDmxPacket(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t * data) {
+void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t * data) {
   seen_universe = universe;
   dmxPacketCounter++;
   tic_artnet = millis();
@@ -159,13 +160,9 @@ void onDmxPacket(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t *
   }
 } // onDmxpacket
 
-#define ART_POLLREPLY 0x2100
-void sendArtPollReply() {
-//    Serial.println("sendArtPollReply:");  
-}
 
 /*
- * Initialize the device after each reboot
+ * Initialize the device during boot
  */
 void setup() {
     // set up serial port and display boot message with version
@@ -273,17 +270,17 @@ void setup() {
     webServer.begin();
 
     // announce the hostname and web server through zeroconf
-//    char hn[50];
-//    config.hostname.toCharArray(hn,50);
     Serial.println("ESP-DMX: enabling zeroconf for "+config.hostname+".local");
-//    MDNS.begin(hn);
     MDNS.begin(config.hostname.c_str());
     MDNS.addService("http", "tcp", 80);
 
     // initialize artnet
     Serial.println("ESP-DMX: starting artnet");
-    artnet.begin();
-    artnet.setArtDmxCallback(onDmxPacket);
+    artnetnode.setName(config.hostname.c_str());
+    artnetnode.setNumPorts(1);
+    artnetnode.enableDMXOutput(0);
+    artnetnode.begin();
+    artnetnode.setArtDmxCallback(onDmxFrame);
 
     // initialize timestamps
     tic_loop   = millis();
@@ -304,8 +301,7 @@ void loop() {
     webServer.handleClient();
   
     // handle artnet
-    uint16_t oc = artnet.read();
-    if (oc == ART_POLL) sendArtPollReply();
+    artnetnode.read();
 
     // handle zeroconf
     MDNS.update();
@@ -317,8 +313,8 @@ void loop() {
         Serial.println("ESP-DMX loop: No wifi connection !!!");
         delay(100);
     } else {
-        // Status line every 2 seconds
-        if ((millis() - tic_status) > 2000) {
+        // Status line every 5 seconds
+        if ((millis() - tic_status) > 5000) {
             last_rssi = WiFi.RSSI();
             tic_status=millis();
             Serial.printf("ESP-DMX loop: status = %s, RSSI=%i, dmxPacket=%d (u=%d), dmxUMatch=%d, u=%d, dmx sent=%d, looplat=%d\n",

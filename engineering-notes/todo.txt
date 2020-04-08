@@ -1,9 +1,17 @@
 
+Issues:
+
+- Webinterface unsesposive when processing artnet frames
+
+Todo:
+
 - Temperature sensor
-- Artnet pollreply
 - Improve update webinterface
   - Display progress page immediately after pressing Update button
+    Seems pretty impossible, must implement in Javascript
 
+Done:
 - Lower status LED brightness
 - Set LED to red when updating
-
+- Changed to library ArtnetnodeWifi to get pollreply
+- Added reset to defaults config page, allows also to change Wifi on next boot
