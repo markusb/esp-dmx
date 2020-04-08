@@ -35,11 +35,16 @@ Wherever there is activity on the web interface (configuration, monitoring), the
 
 - My cheap PARs semm not to like frames shorter than 512 channels.
 
-# Components
+# Components / Hardware
+
+Most ESP8266 modules or boards can be used. Personally I use the Wemos D1
+with the protoboard shield. The circuit is built on the protoboard.
 
   - Wemos D1 mini
-  - MAX485 module
+  - MAX485 module or chip
   - WS2812 RGB LED
+  - NPN transistor (with enough current for your fan), optional
+  - 100k NTC for temperature measurement, optional
 
 # Wiring diagram
 
@@ -47,7 +52,7 @@ Wherever there is activity on the web interface (configuration, monitoring), the
                             +-----+ 
                        Rst  +  W  +  Tx
           NTC <-        A0  +  E  +  Rx
-                 D0/GPIO16  +  M  +  D1/GPIO5   -> RS422 En
+          Fan <- D0/GPIO16  +  M  +  D1/GPIO5   -> RS422 En
         LED_B <- D5/GPIO14  +  O  +  D2/GPIO4 
         LED_R <- D6/GPIO12  +  S  +  D3/GPIO0*
     NEO/LED_G <- D7/GPIO13  +     +  D4/GPIO2*  -> RS422 Tx
@@ -61,7 +66,7 @@ Wherever there is activity on the web interface (configuration, monitoring), the
 	 Wemod D1 D1 <- 3 TxEn   outa 6  -> DMX fixture
 	 Wemod D1 D4 <- 4 Tx      gnd 5  -> Wemos D1 Gnd
 
-There is a schematic diagram and a wriring example among the files.
+There is are [schematics](Schematics.png) and a [wiring diagram](Wiring-Diagram.png) among the files.
 
 Some remarks:
 
@@ -72,7 +77,7 @@ Some remarks:
 
 # ToDo
 
-Add an Artnet PollReply so that the device is visible to Artnet controllers
+See the [todo list](engineering-notes/todo.txt)
 
 # Reference
 

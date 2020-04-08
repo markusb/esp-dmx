@@ -6,6 +6,7 @@ Issues:
 Todo:
 
 - Temperature sensor
+- Temperature dependent fan-control
 - Improve update webinterface
   - Display progress page immediately after pressing Update button
     Seems pretty impossible, must implement in Javascript
