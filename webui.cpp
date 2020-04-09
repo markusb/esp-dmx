@@ -39,6 +39,7 @@ void defaultConfig() {
     config.universe = 1;
     config.channels = 512;
     config.delay = 25;
+    config.holdsecs = 5;
     config.hostname = "ESP-DMX-"+WiFi.macAddress().substring(9);
     config.hostname.replace(":","");
 }
@@ -77,6 +78,7 @@ bool loadConfig() {
   if (jsonDoc.containsKey("universe")) { config.universe = jsonDoc["universe"]; } 
   if (jsonDoc.containsKey("channels")) { config.channels = jsonDoc["channels"]; } 
   if (jsonDoc.containsKey("delay")) { config.delay = jsonDoc["delay"]; } 
+  if (jsonDoc.containsKey("holdsecs")) { config.holdsecs = jsonDoc["holdsecs"]; } 
   return true;
 }
 
@@ -91,6 +93,7 @@ bool saveConfig() {
   jsonDoc["universe"] = config.universe;
   jsonDoc["channels"] = config.channels;
   jsonDoc["delay"] = config.delay;
+  jsonDoc["holdsecs"] = config.holdsecs;
 
   File configFile = SPIFFS.open("/config.json", "w");
   if (!configFile) {
@@ -228,6 +231,7 @@ void http_index() {
     page += "<tr><td>Universe:</td><td>"; page += config.universe; page += "</td></tr>\n";
     page += "<tr><td>Channels:</td><td>"; page += config.channels; page += "</td></tr>\n";
     page += "<tr><td>Delay:</td><td>"; page += config.delay; page += "</td></tr>\n";
+    page += "<tr><td>Seconds to hold last frame after signal loss:</td><td>"; page += config.holdsecs; page += "</td></tr>\n";
     page += "<tr><td>FPS:</td><td>"; page += fps; page += "</td></tr>\n";
     page += "<tr><td>Artnet packets seen:</td><td>"; page += dmxPacketCounter; page += " (universe:";
     page += seen_universe; page += ")</td></tr>\n";
@@ -279,6 +283,7 @@ void http_config() {
             if (webServer.argName(i) == "universe") { config.universe = webServer.arg(i).toInt(); }
             if (webServer.argName(i) == "channels") { config.channels = webServer.arg(i).toInt(); }
             if (webServer.argName(i) == "delay")    { config.delay = webServer.arg(i).toInt(); }
+            if (webServer.argName(i) == "holdsecs") { config.holdsecs = webServer.arg(i).toInt(); }
             if (webServer.argName(i) == "save")     { post_request = POST_REQUEST_SAVE; Serial.println("http_config: save"); }
             if (webServer.argName(i) == "defaults") { post_request = POST_REQUEST_DEFAULTS; Serial.println("http_config: defaults"); }
         }
@@ -305,6 +310,9 @@ void http_config() {
         body += "' required></td></tr>\n";
         body += "<tr><td>Delay configured:</td><td><input type='text' id='delay' name='delay' value='";
         body += config.delay;
+        body += "' required></td></tr>";
+        body += "<tr><td>Seconds to hold last state after signal loss:</td><td><input type='text' id='holdsecs' name='holdsecs' value='";
+        body += config.holdsecs;
         body += "' required></td></tr>";
         body += "<tr><td></td><td><button name='save' type='submit'>Save Config</button>\n";
         body += "<p><button name='defaults' type='submit'>Reset to defaults</button> (including wifi)</td></tr>\n";

@@ -59,7 +59,8 @@ unsigned long packetCounter = 0;
 unsigned long frameCounter = 0;
 unsigned long dmxUMatchCounter = 0;
 unsigned long dmxPacketCounter = 0;
-bool packetReceived = false;
+bool packetReceived = false;    // Artnet packet in buffer waiting to be sent as DMX, gets reset after sending DMX
+unsigned long holdframe = 0;    // holding last valid frame for some time
 float fps = 0;
 
 //#define ANALYZEJITTER
@@ -161,6 +162,15 @@ int readTemperature () {
     temperature = int(betaNTC(ntcRes));
 }
 
+void sendDmxData() {
+    frameCounter++;
+    sendBreak();
+    Serial1.write(0); // Start-Byte
+    // send out the value of the selected channels (up to 512)
+    for (int i = 0; i < MIN(global.length, config.channels); i++) {
+        Serial1.write(global.data[i]);
+    }
+}
 
 /*
  * Artnet packet routine
@@ -171,35 +181,35 @@ int readTemperature () {
  *
  */
 void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t * data) {
-  seen_universe = universe;
-  dmxPacketCounter++;
-  tic_artnet = millis();
-
-  // print some feedback
+    seen_universe = universe;
+    dmxPacketCounter++;
+    tic_artnet = millis();
+  
+    // print some feedback
 /*  if ((millis() - tic_fps) > 1000 && frameCounter > 100) {
-    // don't estimate the FPS too frequently
-    fps = 1000 * frameCounter / (millis() - tic_fps);
-    tic_fps = millis();
-    frameCounter = 0;
-    Serial.print("onDmxPacket: packetCounter = ");
-    Serial.print(packetCounter++);
-    Serial.print(",  FPS = ");
-    Serial.print(fps);
-    Serial.println();
+        // don't estimate the FPS too frequently
+        fps = 1000 * frameCounter / (millis() - tic_fps);
+        tic_fps = millis();
+        frameCounter = 0;
+        Serial.print("onDmxPacket: packetCounter = ");
+        Serial.print(packetCounter++);
+        Serial.print(",  FPS = ");
+        Serial.print(fps);
+        Serial.println();
   }
 */
-
-  if (universe == config.universe) {
-    packetReceived = true;
-    // If the universe matches copy the data from the UDP packet over to the global universe buffer
-    tic_umatch = millis();
-    dmxUMatchCounter++;
-    global.universe = universe;
-    global.sequence = sequence;
-    if (length < 512) global.length = length;
-    for (int i = 0; i < global.length; i++)
-        global.data[i] = data[i];
-  }
+  
+    if (universe == config.universe) {
+        packetReceived = true;
+        // If the universe matches copy the data from the UDP packet over to the global universe buffer
+        tic_umatch = millis();
+        dmxUMatchCounter++;
+        global.universe = universe;
+        global.sequence = sequence;
+        if (length < 512) global.length = length;
+        for (int i = 0; i < global.length; i++)
+            global.data[i] = data[i];
+    }
 } // onDmxpacket
 
 
@@ -370,7 +380,7 @@ void loop() {
             status = STATUS_WEBREQUEST;
             setStatusLED(LED_BLUE);
             delay(10);
-        } else if ((millis() - tic_umatch) < 5000) {
+        } else if ((millis() - tic_umatch) < (config.holdsecs*1000)) {
             //
             // There was a matching artnet frame in the last 5 seconds !
             //
@@ -385,15 +395,9 @@ void loop() {
             if (packetReceived || ((millis() - tic_loop) > config.delay)) {
                 // this section gets executed at a maximum rate of around 40Hz
                 packetReceived = false;
+                sendDmxData();
                 tic_loop = millis();
                 last_looplat = tic_looplat;
-                frameCounter++;
-                sendBreak();
-                Serial1.write(0); // Start-Byte
-                // send out the value of the selected channels (up to 512)
-                for (int i = 0; i < MIN(global.length, config.channels); i++) {
-                    Serial1.write(global.data[i]);
-                }
 #ifdef ANALYZEJITTER                
                 dmxSendHist[dmxSendIdx++]=millis();
                 if (dmxSendIdx>=DMXSENDHISTLEN) {

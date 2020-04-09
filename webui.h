@@ -27,6 +27,7 @@ struct Config {
   int universe;
   int channels;
   int delay;
+  int holdsecs;
 };
 
 #endif // _WEBUI_H_
