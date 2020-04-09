@@ -30,6 +30,7 @@ extern int last_rssi;
 extern void setStatusLED(int);
 extern float fps;
 extern globalStruct global;
+extern int temperature;
 
 /*
  * Set default config on initial boot if there is no configuration yet
@@ -233,6 +234,9 @@ void http_index() {
     page += "<tr><td>Artnet packets processed:</td><td>"; page += dmxUMatchCounter; page += "</td></tr>\n";
     page += "<tr><td>Artnet packet length:</td><td>"; page += global.length; page += " (channels)</td></tr>\n";
     page += "<tr><td>Status:</td><td>"; page += status_text[status], page += "</td></tr>\n";
+//    page += "<tr><td>Device temperature:</td><td>"; page += temperature; page+= "/"; page += tempAdc; page+= "/"; page += ntcRes; page += "</td></tr>\n";
+    page += "<tr><td>Device temperature:</td><td>"; page += temperature; page += "</td></tr>\n";
+    page += "<tr><td>Device uptime (s):</td><td>"; page += millis()/1000, page += "</td></tr>\n";
     page += "</table>\n";
     page += http_foot();
     
@@ -343,7 +347,7 @@ void http_restart () {
     if (webServer.method() == HTTP_POST) {
         Serial.println("POST (reset)");
         Serial.println("Resetting device");
-        setStatusLED(0x0ff0000); // red
+        setStatusLED(LED_RED); // red
         head = "<head><title>"+config.hostname+"</title><meta http-equiv='refresh' content='15;url=/'></head>\n";
         body += "<h1 style='align: center;'>Resetting ...</h1><p>\n";
         webServer.send(200, "text/html", head+body+foot);

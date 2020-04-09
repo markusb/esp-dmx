@@ -8,6 +8,7 @@
 // Color codes for LED, Format 0xrrggbb
 #define LED_OFF    0x0000000
 #define LED_RED    0x0660000  // Initial boot
+#define LED_ORANGE 0x0553300  // Wifi lost
 #define LED_YELLOW 0x0666600  // Setting up Wifi
 #define LED_PINK   0x0660066  // Connected to wifi, ready for DMX
 #define LED_CYAN   0x0006666  // Observing DMX, but other universe

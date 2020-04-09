@@ -6,11 +6,34 @@ Objective: Measure ambient temperature between 0°C to 100°C
 - The D1 analog port has an impedance of 320k to ground
 - The NTC is connected to the 3v3 supply
 
-Calculation with a 100k NTC (TTC05104)
+Calculations with a 100k NTC (TTC05104) https://www.taydaelectronics.com/datasheets/A-410.pdf
 
 Resistance:  0°C 350k   ->  492mV
             25°C 100k   ->  785mV
             60°C  20k   ->  970mV
            100°C   4.5k -> 1019mV
 
+Calculate ADC voltage from NTC resistance:
+
+Vadc = 3.3V*320/(NTC+320k)
+
+Calculate NTC resistance from ADC voltage
+
+NTC = Vadc/3.3V*100k-320k
+
+ADC readings at different temperatures:
+
+Freezer    -22°C    266/252/247/235/228/225
+Fridge       8°C    687/792/856/763/634/629/632
+Living      25°C    775/792
+Oven        55°C    992/
+Oven        65°C    1015/
+Oven        99°C    1015
+
+The beta calculation to get temperature from the NTC seems to be working nicely.
+Ref:  https://www.jameco.com/Jameco/workshop/TechTip/temperature-measurement-ntc-thermistors.html
+
+const float R0 = 100000;  // Base resiatnce value at base temperature from data sheet
+const float B = 4400;     // Beta (from ntc data sheet)
+const float T0 = 298.15;  // base temperature 25°C in Kelvin (273.15 + 25)
 

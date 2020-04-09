@@ -82,6 +82,10 @@ long last_looplat=0; // saved loop latency for display on serial port
 uint16_t seen_universe = 0;  // universe number of last seen artnet frame
 int last_rssi;               // Wifi RSSI for display
 
+int temperature = 0;  // temperature in deg c
+int tempAdc = 0;      // temperature reading from ADC
+#define ANALOGPIN A0  //
+
 #define NEOPIXEL
 
 // Status codes for display
@@ -119,6 +123,44 @@ void setStatusLED(int color) {
     if (color && 0x00000ff) digitalWrite(PIN_LED_B, LOW); else digitalWrite(PIN_LED_B, HIGH);
 #endif
 }
+
+
+/*
+ * Temperature measurements
+ */
+ 
+// https://www.jameco.com/Jameco/workshop/TechTip/temperature-measurement-ntc-thermistors.html
+// definitions here for a TTC05104 
+const float R0 = 100000;  // Base resiatnce value at base temperature from data sheet
+const float B = 4400;     // Beta (from ntc data sheet)
+const float T0 = 298.15;  // base temperature 25°C in Kelvin (273.15 + 25)
+float betaNTC(float R) {
+    float T;
+    T = 1/(1/T0 + 1/B*log(R/R0));
+    T = T - 273.15;
+    return T;
+}
+
+float ntcRes;
+int readTemperature () {
+    // read the ADC
+    int i = analogRead(ANALOGPIN);
+
+    // initialize the smooting on the first call
+    if (tempAdc == 0) {
+        tempAdc = i;
+    } else {
+        // smooth the ADC reading, the new reading get 10% weight
+        tempAdc = ((tempAdc * 9) + i) / 10;
+    }
+
+    // calculate the NTC resistance
+    ntcRes = 330000000/tempAdc-320000;
+
+    // calculate temparature from NTC resistance
+    temperature = int(betaNTC(ntcRes));
+}
+
 
 /*
  * Artnet packet routine
@@ -236,7 +278,7 @@ void setup() {
     WiFi.begin(MYSSID, MYPASS);
     while (WiFi.status() != WL_CONNECTED) {
         Serial.print(".");
-        delay(500);
+        delay(2000);
     }
     Serial.println();
 #endif
@@ -296,7 +338,8 @@ void setup() {
  * Main loop for processing
  */
 void loop() {
-  
+    readTemperature();
+    
     // handle web service
     webServer.handleClient();
   
@@ -309,7 +352,7 @@ void loop() {
     // Main processing here
     if (WiFi.status() != WL_CONNECTED) {
         // If no wifi, then show red LED
-        setStatusLED(LED_RED);
+        setStatusLED(LED_ORANGE);
         Serial.println("ESP-DMX loop: No wifi connection !!!");
         delay(100);
     } else {
