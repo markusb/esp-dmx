@@ -44,68 +44,69 @@ void defaultConfig() {
     config.hostname.replace(":","");
 }
 
+
 /*
  * Attempt loading the configuration from a file in SPIFFS
  */
 bool loadConfig() {
-  Serial.println("loadConfig: Loading config from /config.json");
-
-  File configFile = SPIFFS.open("/config.json", "r");
-  if (!configFile) {
-    Serial.println("loadConfig: Failed to open config file /config.json");
-    return false;
-  }
-
-  size_t size = configFile.size();
-  if (size > 1024) {
-    Serial.println("loadConfig: Config file size is too large");
-    return false;
-  }
-
-  std::unique_ptr<char[]> buf(new char[size]);
-  configFile.readBytes(buf.get(), size);
-  configFile.close();
-  char * bp = &buf[0];
-//  Serial.print("config file:");Serial.println(bp);
-
-  DynamicJsonDocument jsonDoc(1024);
-  DeserializationError error = deserializeJson(jsonDoc, buf.get());
-  if (error) {
-    Serial.println("loadConfig: Failed to parse config file");
-    return false;
-  }
-  if (jsonDoc.containsKey("hostname")) { String hn = jsonDoc["hostname"]; config.hostname = hn; };
-  if (jsonDoc.containsKey("universe")) { config.universe = jsonDoc["universe"]; } 
-  if (jsonDoc.containsKey("channels")) { config.channels = jsonDoc["channels"]; } 
-  if (jsonDoc.containsKey("delay")) { config.delay = jsonDoc["delay"]; } 
-  if (jsonDoc.containsKey("holdsecs")) { config.holdsecs = jsonDoc["holdsecs"]; } 
-  return true;
+    Serial.println("loadConfig: Loading config from /config.json");
+  
+    File configFile = SPIFFS.open("/config.json", "r");
+    if (!configFile) {
+        Serial.println("loadConfig: Failed to open config file /config.json");
+        return false;
+    }
+  
+    size_t size = configFile.size();
+    if (size > 1024) {
+        Serial.println("loadConfig: Config file size is too large");
+        return false;
+    }
+  
+    std::unique_ptr<char[]> buf(new char[size]);
+    configFile.readBytes(buf.get(), size);
+    configFile.close();
+    char * bp = &buf[0];
+  
+    DynamicJsonDocument jsonDoc(1024);
+    DeserializationError error = deserializeJson(jsonDoc, buf.get());
+    if (error) {
+        Serial.println("loadConfig: Failed to parse config file");
+        return false;
+    }
+    if (jsonDoc.containsKey("hostname")) { String hn = jsonDoc["hostname"]; config.hostname = hn; };
+    if (jsonDoc.containsKey("universe")) { config.universe = jsonDoc["universe"]; } 
+    if (jsonDoc.containsKey("channels")) { config.channels = jsonDoc["channels"]; } 
+    if (jsonDoc.containsKey("delay")) { config.delay = jsonDoc["delay"]; } 
+    if (jsonDoc.containsKey("holdsecs")) { config.holdsecs = jsonDoc["holdsecs"]; } 
+    return true;
 }
+
 
 /*
  * Attempt saving the configuration to a file in SPIFFS
  */
 bool saveConfig() {
-  Serial.println("saveConfig: ");
-  DynamicJsonDocument jsonDoc(500);
-
-  jsonDoc["hostname"] = config.hostname;
-  jsonDoc["universe"] = config.universe;
-  jsonDoc["channels"] = config.channels;
-  jsonDoc["delay"] = config.delay;
-  jsonDoc["holdsecs"] = config.holdsecs;
-
-  File configFile = SPIFFS.open("/config.json", "w");
-  if (!configFile) {
-    Serial.println("saveConfig: Failed to open config file for writing");
-    return false;
-  }
-  else {
-    Serial.println("saveConfig: Writing to config file /config.json");
-    serializeJson(jsonDoc, configFile);
-    configFile.close();
-    return true;
-  }
+    Serial.println("saveConfig: ");
+    DynamicJsonDocument jsonDoc(500);
+  
+    jsonDoc["hostname"] = config.hostname;
+    jsonDoc["universe"] = config.universe;
+    jsonDoc["channels"] = config.channels;
+    jsonDoc["delay"] = config.delay;
+    jsonDoc["holdsecs"] = config.holdsecs;
+  
+    File configFile = SPIFFS.open("/config.json", "w");
+    if (!configFile) {
+        Serial.println("saveConfig: Failed to open config file for writing");
+        return false;
+    }
+    else {
+        Serial.println("saveConfig: Writing to config file /config.json");
+        serializeJson(jsonDoc, configFile);
+        configFile.close();
+        return true;
+    }
 }
 
 /*
@@ -134,8 +135,6 @@ void ota_restart() {
     webServer.sendHeader("Connection", "close");
     webServer.sendHeader("Access-Control-Allow-Origin", "*");
     webServer.send(200, "text/html", page+http_foot());
-
-//    webServer.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
 
     delay(1000);
     ESP.restart();
@@ -192,11 +191,16 @@ void http_error404() {
     webServer.send(404, "text/plain", message);
 }
 
+
+/*
+ * Format an IP address as string
+ */
 char* IP2String (IPAddress ip) {
     static char a[16];
     sprintf(a, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
     return a;
 }
+
 
 /*
  * Assemble the common footer string
@@ -207,6 +211,7 @@ String http_foot() {
     foot += "</body>\n";
     return foot;
 }
+
 
 /*
  * Assemble the main index and status page
@@ -246,6 +251,7 @@ void http_index() {
     
     webServer.send(200, "text/html", page);
 }
+
 
 /*
  * Assemble the configuration form
@@ -330,6 +336,7 @@ void http_config() {
     }
 }
 
+
 /*
  * Assemble the restart form
  * 
@@ -367,6 +374,7 @@ void http_restart () {
     webServer.send(200, "text/html", head+body+foot);
 }
 
+
 /*
  * Display the firmware update form
  */
@@ -391,6 +399,7 @@ void http_update() {
     webServer.send(200, "text/html", head+body+foot);
 }
 
+
 /*
  * Sends the favicon
  */
@@ -398,6 +407,7 @@ void http_favicon () {
     Serial.println("\tSend Favicon");
     webServer.send_P(200, favicon_ctype, favicon_ico, favicon_ico_len);
 }
+
 
 /*
  * Sends the dmx512 image

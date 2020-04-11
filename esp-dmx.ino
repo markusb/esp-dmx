@@ -256,14 +256,14 @@ void setup() {
     // Attempt to get config from SPIFFS
     Serial.println("ESP-DMX: load config");
     if (loadConfig()) {
-      Serial.println("ESP-DMX: config loaded");
-      setStatusLED(LED_YELLOW);
-      delay(200);
+        Serial.println("ESP-DMX: config loaded");
+        setStatusLED(LED_YELLOW);
+        delay(200);
     } else {
-      Serial.println("ESP-DMX: config not found, setting defaults");
-      setStatusLED(LED_WHITE);
-      defaultConfig();
-      delay(200);
+        Serial.println("ESP-DMX: config not found, setting defaults");
+        setStatusLED(LED_WHITE);
+        defaultConfig();
+        delay(200);
     }
 
     Serial.print("Hostname: ");Serial.println(config.hostname);

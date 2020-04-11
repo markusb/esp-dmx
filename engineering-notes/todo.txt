@@ -5,14 +5,17 @@ Issues:
 
 Todo:
 
-- Temperature sensor
 - Temperature dependent fan-control
 - Improve update webinterface
   - Display progress page immediately after pressing Update button
     Seems pretty impossible, must implement in Javascript
+- Update from internet
+- Allow parameter reset and wifi reset separately
 
 Done:
+- Temperature sensor
 - Lower status LED brightness
 - Set LED to red when updating
 - Changed to library ArtnetnodeWifi to get pollreply
 - Added reset to defaults config page, allows also to change Wifi on next boot
+
