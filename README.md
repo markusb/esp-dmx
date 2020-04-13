@@ -18,10 +18,10 @@ Color | Meaning
 ------| -------
 <span style="color:red">Red</span>       | The device is booting
 <span style="color:yellow">Yellow</span> | Connecting to Wifi
-<span style="color:pink">Pink</span>     | Device is ready and conneted to Wifi
+<span style="color:pink">Pink</span>     | Device is ready and connected to Wifi
 <span style="color:cyan">Cyan</span>     | Artnet frames are detected, but ignored as the universe does not match
 <span style="color:green">Green</span>   | Artnet frames are received and transmitted to DMX
-<span style="color:blue">Blue</span>     | DMX frames are transmitted from memory
+<span style="color:blue">Blue</span>     | DMX frames are transmitted from buffer
 
 Wherever there is activity on the web interface (configuration, monitoring), the LED turns blue. During web interface activity, the DMX512 output is silenced. A smooth web interface and smooth DMX signalling don't go together.
 
@@ -29,14 +29,15 @@ Wherever there is activity on the web interface (configuration, monitoring), the
 
 - The MAX485 transmitter is switched off, when no frames are sent.
   This places the driver in high-Z mode and allows to use the DMX input with
-  the ESP-DMX device still connected.
+  the ESP-DMX device still connected. The aim is to solder the device directly
+  to the DMX fixture, but retaining the option to use conventional DMX.
 - Everything is self-contained in the binary. There is no need to upload/maintain
   data in the SPIFFS filesystem. SPIFFS is used to hold the configuration data
   and as temporary storage for updating the firmware.
 
 # Limitations
 
-- My cheap PARs semm not to like frames shorter than 512 channels.
+- My cheap PARs seem not to like frames shorter than 512 channels.
 
 # Components / Hardware
 

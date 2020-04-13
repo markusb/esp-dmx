@@ -19,19 +19,23 @@
 
 extern ESP8266WebServer webServer;
 extern Config config;
-extern const char* version;
+extern const char* build;
+extern int version_mayor;
+extern int version_minor;
+
 extern int status;
 extern char * status_text[];
 extern unsigned long packetCounter;
 extern unsigned long dmxUMatchCounter;
-extern unsigned long dmxPacketCounter;
+extern unsigned long artnetPacketCounter;
 extern uint16_t seen_universe;
 extern int last_rssi;
-extern void setStatusLED(int);
+extern void setStatusLED(int,int);
 extern float fps;
 extern globalStruct global;
 extern int temperature;
 extern int fanspeed;
+extern int dmxFrameCounter;
 
 /*
  * Set default config on initial boot if there is no configuration yet
@@ -118,7 +122,7 @@ void ota_restart() {
     Serial.print("hasError: ");
     Serial.println((Update.hasError()) ? "FAIL" : "OK");
 
-    setStatusLED(LED_RED);
+    setStatusLED(LED_RED,500);
 
     String page = "<head><title>"+config.hostname+"</title><meta http-equiv='refresh' content='10;url=/'></head>\n";
     page += "<body><h1 style='text-align: center;'>"+config.hostname+"</h1>\n";
@@ -149,7 +153,7 @@ void ota_upload() {
     if (upload.status == UPLOAD_FILE_START) {
         Serial.setDebugOutput(true);
         WiFiUDP::stopAll();
-        setStatusLED(LED_YELLOW);
+        setStatusLED(LED_YELLOW,500);
         uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
         Serial.printf("ota_upload: Upload start, filename: %s, space available: %u  ", upload.filename.c_str(),maxSketchSpace);
         if (!Update.begin(maxSketchSpace)) { //start with max available size
@@ -233,16 +237,16 @@ void http_index() {
     page += "<tr><td>Wifi SSID:</td><td>"+WiFi.SSID()+"</td></tr>\n";
     page += "<tr><td>RSSI (signal strngth):</td><td>"; page += last_rssi; page += "</td></tr>\n";
     page += "<tr><td>IP:</td><td>"; page += IP2String(WiFi.localIP()); page += "</td></tr>\n";
-    page += "<tr><td>ESP-DMX build:</td><td>"; page += version; page += "</td></tr>\n";
+    page += "<tr><td>ESP-DMX version (build):</td><td>"; page += version_mayor; page += "."; page += version_minor; page += " ("; page += build; page += ")</td></tr>\n";
     page += "<tr><td>Universe:</td><td>"; page += config.universe; page += "</td></tr>\n";
     page += "<tr><td>Channels:</td><td>"; page += config.channels; page += "</td></tr>\n";
     page += "<tr><td>Delay:</td><td>"; page += config.delay; page += "</td></tr>\n";
     page += "<tr><td>Seconds to hold last frame after signal loss:</td><td>"; page += config.holdsecs; page += "</td></tr>\n";
     page += "<tr><td>FPS:</td><td>"; page += fps; page += "</td></tr>\n";
-    page += "<tr><td>Artnet packets seen:</td><td>"; page += dmxPacketCounter; page += " (universe:";
+    page += "<tr><td>Artnet packets seen:</td><td>"; page += artnetPacketCounter; page += " (universe:";
     page += seen_universe; page += ")</td></tr>\n";
-    page += "<tr><td>Artnet packets processed:</td><td>"; page += dmxUMatchCounter; page += "</td></tr>\n";
-    page += "<tr><td>Artnet packet length:</td><td>"; page += global.length; page += " (channels)</td></tr>\n";
+    page += "<tr><td>DMX frames sent:</td><td>"; page += dmxFrameCounter; page += "</td></tr>\n";
+    page += "<tr><td>DMX packet length:</td><td>"; page += global.length; page += " (channels)</td></tr>\n";
     page += "<tr><td>Status:</td><td>"; page += status_text[status], page += "</td></tr>\n";
     page += "<tr><td>Device temperature:</td><td>"; page += temperature; page += "</td></tr>\n";
     page += "<tr><td>Fan speed (0-1024):</td><td>"; page += fanspeed; page += "</td></tr>\n";
@@ -332,7 +336,7 @@ void http_config() {
         body += config.holdsecs;
         body += "' required></td></tr>";
         body += "<tr><td></td><td><button name='save' type='submit'>Save Config</button></td></tr>\n";
-        body += "<tr><td colspan=2 aling=center><button name='formdefaults' type='submit'>Reset config to defaults</button> ";
+        body += "<tr><td colspan=2 align=center><button name='formdefaults' type='submit'>Reset config to defaults</button> ";
         body += "<button name='wifidefaults' type='submit'>Reset wifi config</button> ";
         body += "<button name='alldefaults' type='submit'>Reset config & wifi</button></td></tr>\n";
         body += "</table></form>\n";
@@ -387,7 +391,7 @@ void http_restart () {
     if (webServer.method() == HTTP_POST) {
         Serial.println("POST (reset)");
         Serial.println("Resetting device");
-        setStatusLED(LED_RED); // red
+        setStatusLED(LED_RED,500); // red
         head = "<head><title>"+config.hostname+"</title><meta http-equiv='refresh' content='15;url=/'></head>\n";
         body += "<h1 style='align: center;'>Resetting ...</h1><p>\n";
         webServer.send(200, "text/html", head+body+foot);
@@ -414,7 +418,7 @@ void http_update() {
     body += "</table>\n";
 
     body += "<form id=\"config\" method=\"post\" action=\"/update\" enctype='multipart/form-data'><p><table>\n";
-    body += "<tr><td>Current firmware:</td><td>"; body += version; body += "</td></tr>\n";
+    body += "<tr><td>Current firmware:</td><td>"; body += build; body += "</td></tr>\n";
     body += "<tr><td>New firmware binary:</td><td><input type=\"file\" id=\"update\" name=\"update\" required></td></tr>\n";
     body += "<tr><td></td><td><button type=\"submit\">Update</button></td></tr>\n";
     body += "</table><p>\n";
