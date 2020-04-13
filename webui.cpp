@@ -31,12 +31,13 @@ extern void setStatusLED(int);
 extern float fps;
 extern globalStruct global;
 extern int temperature;
+extern int fanspeed;
 
 /*
  * Set default config on initial boot if there is no configuration yet
  */
 void defaultConfig() {
-    config.universe = 1;
+    config.universe = 0;
     config.channels = 512;
     config.delay = 25;
     config.holdsecs = 5;
@@ -243,8 +244,8 @@ void http_index() {
     page += "<tr><td>Artnet packets processed:</td><td>"; page += dmxUMatchCounter; page += "</td></tr>\n";
     page += "<tr><td>Artnet packet length:</td><td>"; page += global.length; page += " (channels)</td></tr>\n";
     page += "<tr><td>Status:</td><td>"; page += status_text[status], page += "</td></tr>\n";
-//    page += "<tr><td>Device temperature:</td><td>"; page += temperature; page+= "/"; page += tempAdc; page+= "/"; page += ntcRes; page += "</td></tr>\n";
     page += "<tr><td>Device temperature:</td><td>"; page += temperature; page += "</td></tr>\n";
+    page += "<tr><td>Fan speed (0-1024):</td><td>"; page += fanspeed; page += "</td></tr>\n";
     page += "<tr><td>Device uptime (s):</td><td>"; page += millis()/1000, page += "</td></tr>\n";
     page += "</table>\n";
     page += http_foot();
@@ -259,7 +260,9 @@ void http_index() {
  * and allows to chnage the configuration again
  */
 #define POST_REQUEST_SAVE 1
-#define POST_REQUEST_DEFAULTS 2
+#define POST_REQUEST_FORMDEFAULTS 2
+#define POST_REQUEST_WIFIDEFAULTS 3
+#define POST_REQUEST_ALLDEFAULTS 4
 
 void http_config() {
     int post_request = 0;
@@ -277,10 +280,10 @@ void http_config() {
 
 
     if (webServer.method() == HTTP_GET) {
-        Serial.println("GET");
+        Serial.println("HTTP: config form GET");
     }
     if (webServer.method() == HTTP_POST) {
-        Serial.println("POST (save)");
+        Serial.println("POST: config form POST");
     
         String message = "HTTP POST Request: ";
         for (uint8_t i = 0; i < webServer.args(); i++) {
@@ -291,7 +294,9 @@ void http_config() {
             if (webServer.argName(i) == "delay")    { config.delay = webServer.arg(i).toInt(); }
             if (webServer.argName(i) == "holdsecs") { config.holdsecs = webServer.arg(i).toInt(); }
             if (webServer.argName(i) == "save")     { post_request = POST_REQUEST_SAVE; Serial.println("http_config: save"); }
-            if (webServer.argName(i) == "defaults") { post_request = POST_REQUEST_DEFAULTS; Serial.println("http_config: defaults"); }
+            if (webServer.argName(i) == "formdefaults") { post_request = POST_REQUEST_FORMDEFAULTS; Serial.println("http_config: formdefaults"); }
+            if (webServer.argName(i) == "wifidefaults") { post_request = POST_REQUEST_WIFIDEFAULTS; Serial.println("http_config: wifidefaults"); }
+            if (webServer.argName(i) == "alldefaults") { post_request = POST_REQUEST_ALLDEFAULTS; Serial.println("http_config: alldefaults"); }
         }
         if (post_request == POST_REQUEST_SAVE) {
              saveConfig();
@@ -299,12 +304,18 @@ void http_config() {
         
              body += "<p><div style='color:red;font-weight:bold;'>Configuration saved</div><p>\n";
         }
-        if (post_request == POST_REQUEST_DEFAULTS) {
-             body += "<p><div style='color:red;font-weight:bold;'>Resetting to defaults ... Rebooting !</div><p>\n";          
+        if (post_request == POST_REQUEST_FORMDEFAULTS) {
+             body += "<p><div style='color:red;font-weight:bold;'>Resetting to default settings, retainign wifi ... Rebooting !</div><p>\n";          
+        }
+        if (post_request == POST_REQUEST_WIFIDEFAULTS) {
+             body += "<p><div style='color:red;font-weight:bold;'>Resetting wifi config ... Rebooting !</div><p>\n";          
+        }
+        if (post_request == POST_REQUEST_ALLDEFAULTS) {
+             body += "<p><div style='color:red;font-weight:bold;'>Resetting to default settings including wifi ... Rebooting !</div><p>\n";          
         }
     }
 
-    if (post_request != POST_REQUEST_DEFAULTS) {
+    if (post_request <= POST_REQUEST_SAVE) {
         body += "<form id='config' method='post' action='/config'>";
         body += "<p><table style='width:100%;'>\n";
         body += "<tr><td>Hostname:</td><td><input type='text' id='hostname' name='hostname' value='"+config.hostname+"' required></td></tr>\n";
@@ -320,13 +331,27 @@ void http_config() {
         body += "<tr><td>Seconds to hold last state after signal loss:</td><td><input type='text' id='holdsecs' name='holdsecs' value='";
         body += config.holdsecs;
         body += "' required></td></tr>";
-        body += "<tr><td></td><td><button name='save' type='submit'>Save Config</button>\n";
-        body += "<p><button name='defaults' type='submit'>Reset to defaults</button> (including wifi)</td></tr>\n";
+        body += "<tr><td></td><td><button name='save' type='submit'>Save Config</button></td></tr>\n";
+        body += "<tr><td colspan=2 aling=center><button name='formdefaults' type='submit'>Reset config to defaults</button> ";
+        body += "<button name='wifidefaults' type='submit'>Reset wifi config</button> ";
+        body += "<button name='alldefaults' type='submit'>Reset config & wifi</button></td></tr>\n";
         body += "</table></form>\n";
     }
     webServer.send(200, "text/html", head+body+foot);
 
-    if (post_request == POST_REQUEST_DEFAULTS) {
+    if (post_request == POST_REQUEST_FORMDEFAULTS) {
+        defaultConfig();
+        saveConfig();
+        delay(2000);
+        ESP.restart();
+    }
+    if (post_request == POST_REQUEST_WIFIDEFAULTS) {
+        WiFiManager wifiManager;
+        wifiManager.resetSettings();
+        delay(2000);
+        ESP.restart();
+    }
+    if (post_request == POST_REQUEST_ALLDEFAULTS) {
         defaultConfig();
         saveConfig();
         WiFiManager wifiManager;
