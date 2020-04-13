@@ -13,12 +13,15 @@ A WS2812 RGB LED is used to show the display status. The same status can be seen
 output or the webinterface.
 
 The colors displayed are as follows:
-- Red:    The device is booting
-- Yellow: Connecting to Wifi
-- Pink:   Device is ready and conneted to Wifi
-- Blue:   Web-interface activity
-- Cyan:   Artnet frames are detected, but ignored as the universe does not match
-- Green:  Artnet frames are received and transmitted to DMX
+
+Color | Meaning
+------| -------
+<span style="color:red">Red</span>       | The device is booting
+<span style="color:yellow">Yellow</span> | Connecting to Wifi
+<span style="color:pink">Pink</span>     | Device is ready and conneted to Wifi
+<span style="color:cyan">Cyan</span>     | Artnet frames are detected, but ignored as the universe does not match
+<span style="color:green">Green</span>   | Artnet frames are received and transmitted to DMX
+<span style="color:blue">Blue</span>     | DMX frames are transmitted from memory
 
 Wherever there is activity on the web interface (configuration, monitoring), the LED turns blue. During web interface activity, the DMX512 output is silenced. A smooth web interface and smooth DMX signalling don't go together.
 
