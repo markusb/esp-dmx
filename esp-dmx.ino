@@ -80,8 +80,10 @@ long millis_dmxready=0;         // received matching artnet frame timestamp
 long millis_serialstatus=0;     // timestamp for periodical status on serial port
 long millis_dmxsend = 0;        // timestamp for limiting the dmx transmit rate
 long millis_statusled = 0;      // for status led change
-long dmxframeskipped = 0;       // counter for artnet frames not sent as DMX
+long dmxskip = 0;       // counter for artnet frames not sent as DMX
 long millis_analogread = 0;
+long dmxloop;
+long micros_dmxsend = 0;
 uint16_t seen_universe = 0;  // universe number of last seen artnet frame
 int last_rssi;               // Wifi RSSI for display
 
@@ -233,18 +235,20 @@ void fanControl () {
  * Send DMX data from buffer out through serial port 1
  */
 void sendDmxData(int delay) {
+    dmxloop = millis() - millis_dmxsend;
     if ((millis() - millis_dmxsend ) >= delay) {
         millis_dmxsend  = millis();
         dmxFrameCounter++;
-        
+        micros_dmxsend = micros();
         sendBreak();
         Serial1.write(0); // Start-Byte
         // send out the value of the selected channels (up to 512)
         for (int i = 0; i < MIN(global.length, config.channels); i++) {
             Serial1.write(global.data[i]);
         }
+        micros_dmxsend = micros()-micros_dmxsend;
     } else {
-        dmxframeskipped++;
+        dmxskip++;
     }
 }
 
@@ -256,7 +260,7 @@ void sendDmxData(int delay) {
  * for our device we copy the dmx data to our dmx buffer
  *
  */
-void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t * data) {
+void onArtnetFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t * data) {
     seen_universe = universe;
     artnetPacketCounter++;
     millis_artnetreceived = millis();
@@ -272,7 +276,7 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t * 
         for (int i = 0; i < global.length; i++)
             global.data[i] = data[i];
     }
-} // onDmxpacket
+}
 
 
 /*
@@ -421,12 +425,12 @@ void setup() {
 
     webServer.onNotFound(http_error404);
     
-    webServer.on("/",            HTTP_GET, []()      { millis_web = millis(); http_index(); });
-    webServer.on("/favicon.ico", HTTP_GET, []        { millis_web = millis(); http_favicon(); });
-    webServer.on("/dmx512.png",  HTTP_GET, []        { millis_web = millis(); http_dmx512png(); });
-    webServer.on("/config", webServer.method(), []() { millis_web = millis(); http_config(); });
-    webServer.on("/restart", webServer.method(), []()      { millis_web = millis(); http_restart(); });
-    webServer.on("/update",      HTTP_GET, []        { millis_web = millis(); http_update(); });
+    webServer.on("/",            HTTP_GET, []()       { millis_web = millis(); http_index(); });
+    webServer.on("/favicon.ico", HTTP_GET, []         { millis_web = millis(); http_favicon(); });
+    webServer.on("/dmx512.png",  HTTP_GET, []         { millis_web = millis(); http_dmx512png(); });
+    webServer.on("/config", webServer.method(), []()  { millis_web = millis(); http_config(); });
+    webServer.on("/restart", webServer.method(), []() { millis_web = millis(); http_restart(); });
+    webServer.on("/update",      HTTP_GET, []         { millis_web = millis(); http_update(); });
     webServer.on("/update",     HTTP_POST, ota_restart, ota_upload);
 
     webServer.begin();
@@ -442,7 +446,7 @@ void setup() {
     artnetnode.setNumPorts(1);
     artnetnode.enableDMXOutput(0);
     artnetnode.begin();
-    artnetnode.setArtDmxCallback(onDmxFrame);
+    artnetnode.setArtDmxCallback(onArtnetFrame);
     
     // initialize timestamps
     millis_dmxsend  = millis()-config.delay;
@@ -486,7 +490,7 @@ void loop() {
             //
             status = STATUS_WEBREQUEST;
             setStatusLED(LED_BLUE,200);
-            delay(50);
+//            delay(50);
         }
         if ((millis() - millis_dmxready) < 2000) {
             //
@@ -537,6 +541,5 @@ void loop() {
     }      
     
     // limit loop speed
-    yield();
     delay(1);
 } // loop
