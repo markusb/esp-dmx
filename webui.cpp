@@ -22,13 +22,14 @@ extern Config config;
 extern const char* build;
 extern int version_mayor;
 extern int version_minor;
-
+extern long dmxloop;
 extern int status;
 extern char * status_text[];
 extern unsigned long packetCounter;
 extern unsigned long dmxUMatchCounter;
 extern unsigned long artnetPacketCounter;
 extern uint16_t seen_universe;
+extern long dmxskip;
 extern int last_rssi;
 extern void setStatusLED(int,int);
 extern float fps;
@@ -36,6 +37,8 @@ extern globalStruct global;
 extern int temperature;
 extern int fanspeed;
 extern int dmxFrameCounter;
+extern long micros_dmxsend;
+
 
 /*
  * Set default config on initial boot if there is no configuration yet
@@ -43,8 +46,8 @@ extern int dmxFrameCounter;
 void defaultConfig() {
     config.universe = 0;
     config.channels = 512;
-    config.delay = 25;
-    config.holdsecs = 5;
+    config.delay = 30;
+    config.holdsecs = 30;
     config.hostname = "ESP-DMX-"+WiFi.macAddress().substring(9);
     config.hostname.replace(":","");
 }
@@ -114,6 +117,7 @@ bool saveConfig() {
     }
 }
 
+
 /*
  * Restart the device after a sucessful upload of new firmware via webinterfac
  */
@@ -144,6 +148,7 @@ void ota_restart() {
     delay(1000);
     ESP.restart();
 }
+
 
 /*
  * Upload a firmware update via webinterface
@@ -176,6 +181,7 @@ void ota_upload() {
     }
     yield();
 }
+
 
 /*
  * Display the 404 error message for unknown URLs
@@ -210,11 +216,29 @@ char* IP2String (IPAddress ip) {
 /*
  * Assemble the common footer string
  */
+
 String http_foot() {
-    String foot = "<p><hr style='width:100%; height:1px; border:none; color:red; background:black;'>";
-    foot += "<p>ESP-DMX by Markus Baertschi, <a href=https://github.com/markusb>github.com/markusb/esp-dmx</a>\n";
-    foot += "</body>\n";
+    String foot =  F("<p><hr style='width:100%; height:1px; border:none; color:red; background:black;'>\n");
+           foot += F("<p>ESP-DMX by Markus Baertschi, <a href=https://github.com/markusb>github.com/markusb/esp-dmx</a>\n");
+           foot += F("</body>\n");
     return foot;
+}
+
+#define PAGE_INDEX 1
+#define PAGE_CONFIG 2
+#define PAGE_RESTART 3
+#define PAGE_UPDATE 4
+String http_head(int pageid) {
+    String head =  F("<head><title>"); head += config.hostname; head += F("</title></head>\n");
+           head += F("<body><h1 style='text-align: center;'>"); head += config.hostname; head += F("</h1>\n");
+           head += F("<table style='width:100%;border: 1px solid black; text-align: center;'>\n<tr>");
+    if (pageid == PAGE_INDEX)   { head += F("<td><b>Home</b></td>"); }    else { head += F("<td><a href='/'>Home</a></td>"); }
+    if (pageid == PAGE_CONFIG)  { head += F("<td><b>Config</b></td>"); }  else { head += F("<td><a href='/config'>Config</a></td>"); }
+    if (pageid == PAGE_RESTART) { head += F("<td><b>Restart</b></td>"); } else { head += F("<td><a href='/restart'>Restart</a></td>"); }
+    if (pageid == PAGE_UPDATE)  { head += F("<td><b>Update</b></td>"); }  else { head += F("<td><a href='/update'>Update</a></td>"); }
+           head += F("</tr>\n</table>\n");
+
+    return head;
 }
 
 
@@ -223,35 +247,30 @@ String http_foot() {
  */
 void http_index() {
     Serial.println("HTTP: Sending index page");
-  
-    String page = "<head><title>"+config.hostname+"</title></head>\n";
-//    page += "<body><img src=/dmx512.png stype='width: 50px;'><h1 style='text-align: center;'>"+config.hostname+"</h1>\n";
-    page += "<body><h1 style='text-align: center;'>"+config.hostname+"</h1>\n";
-  
-    page += "<table style='width:100%;border: 1px solid black; text-align: center;'>\n";
-    page += "<tr><td><b>Home</b></td><td><a href=/config>Config</a></td><td><a href=/restart>Restart</a></td><td><a href=/update>Update</a></td></tr>\n";
-    page += "</table>\n";
-  
-    page += "<p><table style='width:100%;border: 1px solid black;'>\n";
-    page += "<tr><td>Hostname:</td><td>"+config.hostname+"</td></tr>\n";
-    page += "<tr><td>Wifi SSID:</td><td>"+WiFi.SSID()+"</td></tr>\n";
-    page += "<tr><td>RSSI (signal strngth):</td><td>"; page += last_rssi; page += "</td></tr>\n";
-    page += "<tr><td>IP:</td><td>"; page += IP2String(WiFi.localIP()); page += "</td></tr>\n";
-    page += "<tr><td>ESP-DMX version (build):</td><td>"; page += version_mayor; page += "."; page += version_minor; page += " ("; page += build; page += ")</td></tr>\n";
-    page += "<tr><td>Universe:</td><td>"; page += config.universe; page += "</td></tr>\n";
-    page += "<tr><td>Channels:</td><td>"; page += config.channels; page += "</td></tr>\n";
-    page += "<tr><td>Delay:</td><td>"; page += config.delay; page += "</td></tr>\n";
-    page += "<tr><td>Seconds to hold last frame after signal loss:</td><td>"; page += config.holdsecs; page += "</td></tr>\n";
-    page += "<tr><td>FPS:</td><td>"; page += fps; page += "</td></tr>\n";
-    page += "<tr><td>Artnet packets seen:</td><td>"; page += artnetPacketCounter; page += " (universe:";
-    page += seen_universe; page += ")</td></tr>\n";
-    page += "<tr><td>DMX frames sent:</td><td>"; page += dmxFrameCounter; page += "</td></tr>\n";
-    page += "<tr><td>DMX packet length:</td><td>"; page += global.length; page += " (channels)</td></tr>\n";
-    page += "<tr><td>Status:</td><td>"; page += status_text[status], page += "</td></tr>\n";
-    page += "<tr><td>Device temperature:</td><td>"; page += temperature; page += "</td></tr>\n";
-    page += "<tr><td>Fan speed (0-1024):</td><td>"; page += fanspeed; page += "</td></tr>\n";
-    page += "<tr><td>Device uptime (s):</td><td>"; page += millis()/1000, page += "</td></tr>\n";
-    page += "</table>\n";
+
+    String page = http_head(PAGE_INDEX);
+    page += F("<p><table style='width:100%; border:1px solid black;'>\n");
+    page += F("<tr><td>Hostname:</td><td>"); page += config.hostname; page += F("</td></tr>\n");
+    page += F("<tr><td>Wifi SSID:</td><td>"); page += WiFi.SSID(); page += F("</td></tr>\n");
+    page += F("<tr><td>RSSI (signal strength):</td><td>"); page += last_rssi; page += F("</td></tr>\n");
+    page += F("<tr><td>IP:</td><td>"); page += IP2String(WiFi.localIP()); page += F("</td></tr>\n");
+    page += F("<tr><td>ESP-DMX version (build):</td><td>"); page += version_mayor; page += "."; page += version_minor; page += " ("; page += build; page += F(")</td></tr>\n");
+    page += F("<tr style='border-top: 1px solid black;'><td>Universe:</td><td>"); page += config.universe; page += F("</td></tr>\n");
+    page += F("<tr><td>Channels:</td><td>"); page += config.channels; page += F("</td></tr>\n");
+    page += F("<tr><td>Delay:</td><td>"); page += config.delay; page += F("</td></tr>\n");
+    page += F("<tr><td>Seconds to hold last frame after signal loss:</td><td>"); page += config.holdsecs; page += "</td></tr>\n";
+    page += F("<tr style='border-top: 1px solid black;'><td>Artnet packets seen:</td><td>"); page += artnetPacketCounter; page += F(" (universe:");
+    page += seen_universe; page += F(")</td></tr>\n");
+    page += F("<tr><td>DMX frames sent:</td><td>"); page += dmxFrameCounter; page += F("</td></tr>\n");
+    page += F("<tr><td>DMX packet length:</td><td>"); page += global.length; page += F(" (channels)</td></tr>\n");
+    page += F("<tr><td>Status:</td><td>"); page += status_text[status], page += F("</td></tr>\n");
+    page += F("<tr style='border-top: 1px solid black;'><td>Device temperature:</td><td>"); page += temperature; page += F("</td></tr>\n");
+    page += F("<tr><td>Fan speed (0-1024):</td><td>"); page += fanspeed; page += F("</td></tr>\n");
+    page += F("<tr><td>Device uptime (s):</td><td>"); page += millis()/1000, page += F("</td></tr>\n");
+    page += F("<tr><td>DMXloop:</td><td>"); page += dmxloop, page += F("</td></tr>\n");
+    page += F("<tr><td>DMX frames skipped:</td><td>"); page += dmxskip, page += F("</td></tr>\n");
+    page += F("<tr><td>micros DMX send:</td><td>"); page += micros_dmxsend, page += F("</td></tr>\n");
+    page += F("</table>\n");
     page += http_foot();
     
     webServer.send(200, "text/html", page);
@@ -273,13 +292,8 @@ void http_config() {
     
     Serial.print("\tHTTP: Config form");
 
-    String head = "<head><title>"+config.hostname+"</title></head>\n";
-    
-    String body = "<body><h1 style='text-align: center;'>"+config.hostname+"</h1>\n";
-    body += "<table style='width:100%;border: 1px solid black; text-align: center;'>\n";
-    body += "<tr><td><a href=/>Home<a></td><td><b>Config</b></td><td><a href=/restart>Restart</a></td><td><a href=/update>Update</a></td></tr>\n";
-    body += "</table>\n";
-
+    String head = http_head(PAGE_CONFIG);
+    String body; 
     String foot = http_foot();
 
 
@@ -306,40 +320,40 @@ void http_config() {
              saveConfig();
              Serial.println(message);
         
-             body += "<p><div style='color:red;font-weight:bold;'>Configuration saved</div><p>\n";
+             body += F("<p><div style='color:red;font-weight:bold;'>Configuration saved</div><p>\n");
         }
         if (post_request == POST_REQUEST_FORMDEFAULTS) {
-             body += "<p><div style='color:red;font-weight:bold;'>Resetting to default settings, retainign wifi ... Rebooting !</div><p>\n";          
+             body += F("<p><div style='color:red;font-weight:bold;'>Resetting to default settings, retainign wifi ... Rebooting !</div><p>\n");          
         }
         if (post_request == POST_REQUEST_WIFIDEFAULTS) {
-             body += "<p><div style='color:red;font-weight:bold;'>Resetting wifi config ... Rebooting !</div><p>\n";          
+             body += F("<p><div style='color:red;font-weight:bold;'>Resetting wifi config ... Rebooting !</div><p>\n");          
         }
         if (post_request == POST_REQUEST_ALLDEFAULTS) {
-             body += "<p><div style='color:red;font-weight:bold;'>Resetting to default settings including wifi ... Rebooting !</div><p>\n";          
+             body += F("<p><div style='color:red;font-weight:bold;'>Resetting to default settings including wifi ... Rebooting !</div><p>\n");          
         }
     }
 
     if (post_request <= POST_REQUEST_SAVE) {
-        body += "<form id='config' method='post' action='/config'>";
-        body += "<p><table style='width:100%;'>\n";
-        body += "<tr><td>Hostname:</td><td><input type='text' id='hostname' name='hostname' value='"+config.hostname+"' required></td></tr>\n";
-        body += "<tr><td>Universe configured:</td><td><input type='text' id='universe' name='universe' value='";
+        body += F("<form id='config' method='post' action='/config'>");
+        body += F("<p><table style='width:100%;'>\n");
+        body += F("<tr><td>Hostname:</td><td><input type='text' id='hostname' name='hostname' value='"); body += config.hostname; body += F("' required></td></tr>\n");
+        body += F("<tr><td>Universe configured:</td><td><input type='text' id='universe' name='universe' value='");
         body += config.universe;
-        body += "' required></td></tr>\n";
-        body += "<tr><td>Channels configured:</td><td><input type='text' id='channels' name='channels' value='";
+        body += F("' required></td></tr>\n");
+        body += F("<tr><td>Channels configured:</td><td><input type='text' id='channels' name='channels' value='");
         body += +config.channels;
-        body += "' required></td></tr>\n";
-        body += "<tr><td>Delay configured:</td><td><input type='text' id='delay' name='delay' value='";
+        body += F("' required></td></tr>\n");
+        body += F("<tr><td>Delay configured:</td><td><input type='text' id='delay' name='delay' value='");
         body += config.delay;
-        body += "' required></td></tr>";
-        body += "<tr><td>Seconds to hold last state after signal loss:</td><td><input type='text' id='holdsecs' name='holdsecs' value='";
+        body += F("' required></td></tr>");
+        body += F("<tr><td>Seconds to hold last state after signal loss:</td><td><input type='text' id='holdsecs' name='holdsecs' value='");
         body += config.holdsecs;
-        body += "' required></td></tr>";
-        body += "<tr><td></td><td><button name='save' type='submit'>Save Config</button></td></tr>\n";
-        body += "<tr><td colspan=2 align=center><button name='formdefaults' type='submit'>Reset config to defaults</button> ";
-        body += "<button name='wifidefaults' type='submit'>Reset wifi config</button> ";
-        body += "<button name='alldefaults' type='submit'>Reset config & wifi</button></td></tr>\n";
-        body += "</table></form>\n";
+        body += F("' required></td></tr>");
+        body += F("<tr><td></td><td><button name='save' type='submit'>Save Config</button></td></tr>\n");
+        body += F("<tr><td colspan=2 align=center><button name='formdefaults' type='submit'>Reset config to defaults</button> ");
+        body += F("<button name='wifidefaults' type='submit'>Reset wifi config</button> ");
+        body += F("<button name='alldefaults' type='submit'>Reset config & wifi</button></td></tr>\n");
+        body += F("</table></form>\n");
     }
     webServer.send(200, "text/html", head+body+foot);
 
@@ -373,27 +387,22 @@ void http_config() {
  */
 void http_restart () {
     Serial.print("HTTP: Restart page ");
-    
-    String head = "<head><title>"+config.hostname+"</title></head>\n";
-    
-    String body = "<body><h1 style='text-align: center;'>"+config.hostname+"</h1>\n";
-    body += "<p><table style='width:100%;border: 1px solid black; text-align: center;'>\n";
-    body += "<tr><td><a href=/>Home<a></td><td><a href=/config>Config</a></td><td><b>Restart</b></td><td><a href=/update>Update</a></td></tr>\n";
-    body += "</table><p>\n";
 
+    String head = http_head(PAGE_RESTART);
+    String body;
     String foot = http_foot();
 
     if (webServer.method() == HTTP_GET) {
         Serial.println("GET (confirmation form)");
-        body += "<form id='reset' method='post' action='/restart'>\n";
-        body += "<p><table style='width:100%;text-align: center;'><tr><td><button type='submit'>Confirm Restart</button></td></tr></table></form><p>\n";
+        body += F("<form id='reset' method='post' action='/restart'>\n");
+        body += F("<p><table style='width:100%;text-align: center;'><tr><td><button type='submit'>Confirm Restart</button></td></tr></table></form><p>\n");
     }
     if (webServer.method() == HTTP_POST) {
         Serial.println("POST (reset)");
         Serial.println("Resetting device");
         setStatusLED(LED_RED,500); // red
-        head = "<head><title>"+config.hostname+"</title><meta http-equiv='refresh' content='15;url=/'></head>\n";
-        body += "<h1 style='align: center;'>Resetting ...</h1><p>\n";
+        head = F("<head><title>"); head += config.hostname; head += F("</title><meta http-equiv='refresh' content='15;url=/'></head>\n");
+        body += F("<h1 style='align: center;'>Resetting ...</h1><p>\n");
         webServer.send(200, "text/html", head+body+foot);
         
         delay(5000);
@@ -410,18 +419,12 @@ void http_restart () {
 void http_update() {
     Serial.println("HTTP: Sending update form");
 
-    String head = "<head><title>"+config.hostname+"</title></head>\n";
-    
-    String body = "<body><h1 style='text-align: center;'>"+config.hostname+"</h1>\n";
-    body += "<table style='width:100%;border: 1px solid black; text-align: center;'>\n";
-    body += "<tr><td><a href=/>Home<a></td><td><a href=/config>Config</a></td><td><a href=/restart>Restart</a></td><td><b>Update</b></td></tr>\n";
-    body += "</table>\n";
-
-    body += "<form id=\"config\" method=\"post\" action=\"/update\" enctype='multipart/form-data'><p><table>\n";
-    body += "<tr><td>Current firmware:</td><td>"; body += build; body += "</td></tr>\n";
-    body += "<tr><td>New firmware binary:</td><td><input type=\"file\" id=\"update\" name=\"update\" required></td></tr>\n";
-    body += "<tr><td></td><td><button type=\"submit\">Update</button></td></tr>\n";
-    body += "</table><p>\n";
+    String head = http_head(PAGE_UPDATE);
+    String body;
+    body += F("<form id=\"config\" method=\"post\" action=\"/update\" enctype='multipart/form-data'><p><table>\n");
+    body += F("<tr><td>Current firmware:</td><td>"); body += build; body += F("</td></tr>\n");
+    body += F("<tr><td>New firmware binary:</td><td><input type=\"file\" id=\"update\" name=\"update\" required></td></tr>\n");
+    body += F("<tr><td></td><td><button type=\"submit\">Update</button></td></tr>\n</table><p>\n");
 
     String foot = http_foot();
 
