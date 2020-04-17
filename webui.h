@@ -20,14 +20,5 @@ void http_dmx512png();
 void http_error404(void);
 void ota_restart(void);
 void ota_upload(void);
-String http_foot();
-
-struct Config {
-  String hostname;
-  int universe;
-  int channels;
-  int delay;
-  int holdsecs;
-};
 
 #endif // _WEBUI_H_

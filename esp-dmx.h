@@ -13,4 +13,13 @@ struct globalStruct {
     uint8_t *data;
 } ;
 
+// Structure for configurable values
+struct Config {
+  String hostname;
+  int universe;
+  int channels;
+  int delay;
+  int holdsecs;
+};
+
 #endif
