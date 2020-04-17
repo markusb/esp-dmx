@@ -31,9 +31,10 @@ Wherever there is activity on the web interface (configuration, monitoring), the
   This places the driver in high-Z mode and allows to use the DMX input with
   the ESP-DMX device still connected. The aim is to solder the device directly
   to the DMX fixture, but retaining the option to use conventional DMX.
-- Everything is self-contained in the binary. There is no need to upload/maintain
-  data in the SPIFFS filesystem. SPIFFS is used to hold the configuration data
-  and as temporary storage for updating the firmware.
+- Fan control of the internal fan dependent on the measured temperature
+- Programmable hold time to hold the last setting if the Artnet signal goes away.
+  For example if I use a tablet as remote control it may go to sleep, stopping
+  to transmit Artnet frames. This feature keeps the lights on.
 
 # Limitations
 
