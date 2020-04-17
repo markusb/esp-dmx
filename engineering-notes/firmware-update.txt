@@ -1,0 +1,5 @@
+
+The firmware can be updated with this commandline:
+
+curl -F "image=@esp-dmx.1.0.bin" http://<ipaddress>/update
+
