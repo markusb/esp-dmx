@@ -1,23 +1,22 @@
 /*
  * ESP-DMX
  * 
- * This is firmware for an SP8266 devices. It receives Artnet date
+ * This is firmware for ESP8266 devices. It receives Artnet data
  * over wifi and sends the configured universe out over serial DMX.
  * 
- * It display the device status on a color LED, the serial output
- * and a webinterface. The webinterface also serves to configure
- * and update the device.
+ * The device status is shown on a color LED
+ * Serial DMX output is sent via the second serial port
+ * A webinterface serves to configure and update the device
  * 
  */
 
-#include <ESP8266WiFi.h>         // https://github.com/esp8266/Arduino
+#include <ESP8266WiFi.h>          // https://github.com/esp8266/Arduino
 #include <ESP8266WebServer.h>
-#include <WiFiManager.h>         // https://github.com/tzapu/WiFiManager
-#include <ESP8266mDNS.h>         // For zeroconf
+#include <WiFiManager.h>          // https://github.com/tzapu/WiFiManager
+#include <ESP8266mDNS.h>          // For zeroconf
 #include <WiFiClient.h>
-// #include <ArtnetWifi.h>          // https://github.com/rstephan/ArtnetWifi
-#include <ArtnetnodeWifi.h>          // https://github.com/rstephan/ArtnetnodeWifi
-#include <Adafruit_NeoPixel.h>
+#include <ArtnetnodeWifi.h>       // https://github.com/rstephan/ArtnetnodeWifi
+#include <Adafruit_NeoPixel.h>    // Driver for the WS2812 color LED
 #include <FS.h>
 #include "webui.h"
 #include "send_break.h"
@@ -37,11 +36,15 @@
 #define MYSSID "ssid"
 #define MYPASS "pass"
 
-Config config;
+// Struct for configurable values
+struct Config config;
+
+// Global universe buffer
+struct globalStruct global;
 
 ESP8266WebServer webServer(80);
 
-// Assemble version/build from compile time date
+// Assemble build string from compile time date
 #define BUILD_YEAR  __DATE__[7],__DATE__[8],__DATE__[9],__DATE__[10]
 #define BUILD_MONTH __DATE__[0],__DATE__[1],__DATE__[2]
 #define BUILD_DAY   ((__DATE__[4] >= '0') ? (__DATE__[4]) : '0'),__DATE__[5]
@@ -54,9 +57,6 @@ int version_minor = 0;
 // Artnet settings
 ArtnetnodeWifi artnetnode;
 
-// Global universe buffer
-struct globalStruct global;
-
 // counters to keep track of things, display statistics
 unsigned long packetCounter = 0;
 unsigned long dmxFrameCounter = 0;
@@ -64,14 +64,7 @@ unsigned long dmxUMatchCounter = 0;
 unsigned long artnetPacketCounter = 0;
 bool packetReceived = false;    // Artnet packet in buffer waiting to be sent as DMX, gets reset after sending DMX
 unsigned long holdframe = 0;    // holding last valid frame for some time
-float fps = 0;
-
-//#define ANALYZEJITTER
-#ifdef ANALYZEJITTER
-#define DMXSENDHISTLEN 256
-unsigned long dmxSendHist[DMXSENDHISTLEN];
-int dmxSendIdx = 0;
-#endif
+unsigned long debugval = 0;
 
 // keep track of the timing
 long millis_web = 0;            // webinterface activity
@@ -179,6 +172,7 @@ int readTemperature () {
     
     // read the ADC
     int i = analogRead(PIN_ANALOG);
+    debugval = i;
 
     // initialize the smooting on the first call
     if (tempAdc == 0) {
@@ -256,8 +250,8 @@ void sendDmxData(int delay) {
  * Artnet packet routine
  * 
  * This routine is called for each received artnet packet
- * If the universe of the received packet matched the configured universe
- * for our device we copy the dmx data to our dmx buffer
+ * If the universe of the received packet matches the configured universe
+ * we copy the dmx data to the dmx buffer
  *
  */
 void onArtnetFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t * data) {
@@ -282,14 +276,20 @@ void onArtnetFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t
 /*
  * Show some light pattern after boot
  */
-void setDmxBuf(int c, int v) {
+void setDmxBuf(int c, uint8_t v) {
+//    global.data[c]=v;
     for (int i=0; i<=64; i++) {
         global.data[c+i*8]=v;
     }
 }
 
 void powerOnShow () {
+    digitalWrite(PIN_DMX_ENABLE, HIGH);
+
+    setStatusLED(LED_BLUE,200);
+    delay(200);
     setStatusLED(LED_ORANGE,200);
+
     setDmxBuf(0,255);
     setDmxBuf(1,255);
     setDmxBuf(2,0);
@@ -300,11 +300,11 @@ void powerOnShow () {
     setDmxBuf(7,0);
     sendDmxData(0);
     delay(200);
+    
 
     setDmxBuf(2,255);
     sendDmxData(0);
     delay(200);
-
 
     setDmxBuf(3,255);
     sendDmxData(0);
@@ -324,6 +324,9 @@ void powerOnShow () {
     delay(500);
     for (int i=0; i<=512; i++) { global.data[i]=0; }
     sendDmxData(0);
+
+    delay(50);
+    digitalWrite(PIN_DMX_ENABLE, LOW);
 }
 
 /*
