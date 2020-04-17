@@ -32,12 +32,12 @@ extern uint16_t seen_universe;
 extern long dmxskip;
 extern int last_rssi;
 extern void setStatusLED(int,int);
-extern float fps;
 extern globalStruct global;
 extern int temperature;
 extern int fanspeed;
 extern int dmxFrameCounter;
 extern long micros_dmxsend;
+extern long debugval;
 
 
 /*
@@ -119,6 +119,41 @@ bool saveConfig() {
 
 
 /*
+ * Assemble the common html header string
+ */
+#define PAGE_INDEX 1
+#define PAGE_CONFIG 2
+#define PAGE_RESTART 3
+#define PAGE_UPDATE 4
+#define PAGE_RESTART 5
+String http_head(int pageid) {
+    String head =  F("<head><title>"); head += config.hostname; head += F("</title>");
+    if (pageid == PAGE_RESTART) { head += F("<meta http-equiv='refresh' content='10;url=/'></head>\n"); } else { head += F("</head>\n"); }
+           head += F("<body><h1 style='text-align: center;'>"); head += config.hostname; head += F("</h1>\n");
+           head += F("<table style='width:100%;border: 1px solid black; text-align: center;'>\n<tr>");
+    if (pageid == PAGE_INDEX)   { head += F("<td><b>Home</b></td>"); }    else { head += F("<td><a href='/'>Home</a></td>"); }
+    if (pageid == PAGE_CONFIG)  { head += F("<td><b>Config</b></td>"); }  else { head += F("<td><a href='/config'>Config</a></td>"); }
+    if (pageid == PAGE_RESTART) { head += F("<td><b>Restart</b></td>"); } else { head += F("<td><a href='/restart'>Restart</a></td>"); }
+    if (pageid == PAGE_UPDATE)  { head += F("<td><b>Update</b></td>"); }  else { head += F("<td><a href='/update'>Update</a></td>"); }
+           head += F("</tr>\n</table>\n");
+
+    return head;
+}
+
+
+/*
+ * Assemble the common html footer string
+ */
+
+String http_foot() {
+    String foot =  F("<p><hr style='width:100%; height:1px; border:none; color:red; background:black;'>\n");
+           foot += F("<p>ESP-DMX by Markus Baertschi, <a href=https://github.com/markusb>github.com/markusb/esp-dmx</a>\n");
+           foot += F("</body>\n");
+    return foot;
+}
+
+
+/*
  * Restart the device after a sucessful upload of new firmware via webinterfac
  */
 void ota_restart() {
@@ -128,12 +163,7 @@ void ota_restart() {
 
     setStatusLED(LED_RED,500);
 
-    String page = "<head><title>"+config.hostname+"</title><meta http-equiv='refresh' content='10;url=/'></head>\n";
-    page += "<body><h1 style='text-align: center;'>"+config.hostname+"</h1>\n";
-  
-    page += "<table style='width:100%;border: 1px solid black; text-align: center;'>\n";
-    page += "<tr><td><a href=/>Home<a></td><td><a href=/config>Config</a></td><td><a href=/restart>Restart</a></td><td><b>Update</b></td></tr>\n";
-    page += "</table>\n";
+    String page = http_head(PAGE_RESTART);
 
     if (Update.hasError()) {
         page += "<p>Error: "+Update.getError();
@@ -213,34 +243,6 @@ char* IP2String (IPAddress ip) {
 }
 
 
-/*
- * Assemble the common footer string
- */
-
-String http_foot() {
-    String foot =  F("<p><hr style='width:100%; height:1px; border:none; color:red; background:black;'>\n");
-           foot += F("<p>ESP-DMX by Markus Baertschi, <a href=https://github.com/markusb>github.com/markusb/esp-dmx</a>\n");
-           foot += F("</body>\n");
-    return foot;
-}
-
-#define PAGE_INDEX 1
-#define PAGE_CONFIG 2
-#define PAGE_RESTART 3
-#define PAGE_UPDATE 4
-String http_head(int pageid) {
-    String head =  F("<head><title>"); head += config.hostname; head += F("</title></head>\n");
-           head += F("<body><h1 style='text-align: center;'>"); head += config.hostname; head += F("</h1>\n");
-           head += F("<table style='width:100%;border: 1px solid black; text-align: center;'>\n<tr>");
-    if (pageid == PAGE_INDEX)   { head += F("<td><b>Home</b></td>"); }    else { head += F("<td><a href='/'>Home</a></td>"); }
-    if (pageid == PAGE_CONFIG)  { head += F("<td><b>Config</b></td>"); }  else { head += F("<td><a href='/config'>Config</a></td>"); }
-    if (pageid == PAGE_RESTART) { head += F("<td><b>Restart</b></td>"); } else { head += F("<td><a href='/restart'>Restart</a></td>"); }
-    if (pageid == PAGE_UPDATE)  { head += F("<td><b>Update</b></td>"); }  else { head += F("<td><a href='/update'>Update</a></td>"); }
-           head += F("</tr>\n</table>\n");
-
-    return head;
-}
-
 
 /*
  * Assemble the main index and status page
@@ -267,9 +269,10 @@ void http_index() {
     page += F("<tr style='border-top: 1px solid black;'><td>Device temperature:</td><td>"); page += temperature; page += F("</td></tr>\n");
     page += F("<tr><td>Fan speed (0-1024):</td><td>"); page += fanspeed; page += F("</td></tr>\n");
     page += F("<tr><td>Device uptime (s):</td><td>"); page += millis()/1000, page += F("</td></tr>\n");
-    page += F("<tr><td>DMXloop:</td><td>"); page += dmxloop, page += F("</td></tr>\n");
-    page += F("<tr><td>DMX frames skipped:</td><td>"); page += dmxskip, page += F("</td></tr>\n");
-    page += F("<tr><td>micros DMX send:</td><td>"); page += micros_dmxsend, page += F("</td></tr>\n");
+//    page += F("<tr><td>DMXloop:</td><td>"); page += dmxloop, page += F("</td></tr>\n");
+//    page += F("<tr><td>DMX skipped:</td><td>"); page += dmxskip, page += F("</td></tr>\n");
+//    page += F("<tr><td>micros DMX send:</td><td>"); page += micros_dmxsend, page += F("</td></tr>\n");
+    page += F("<tr><td>debugval:</td><td>"); page += debugval, page += F("</td></tr>\n");
     page += F("</table>\n");
     page += http_foot();
     
@@ -401,7 +404,7 @@ void http_restart () {
         Serial.println("POST (reset)");
         Serial.println("Resetting device");
         setStatusLED(LED_RED,500); // red
-        head = F("<head><title>"); head += config.hostname; head += F("</title><meta http-equiv='refresh' content='15;url=/'></head>\n");
+//        head = F("<head><title>"); head += config.hostname; head += F("</title><meta http-equiv='refresh' content='15;url=/'></head>\n");
         body += F("<h1 style='align: center;'>Resetting ...</h1><p>\n");
         webServer.send(200, "text/html", head+body+foot);
         
@@ -421,9 +424,10 @@ void http_update() {
 
     String head = http_head(PAGE_UPDATE);
     String body;
-    body += F("<form id=\"config\" method=\"post\" action=\"/update\" enctype='multipart/form-data'><p><table>\n");
-    body += F("<tr><td>Current firmware:</td><td>"); body += build; body += F("</td></tr>\n");
-    body += F("<tr><td>New firmware binary:</td><td><input type=\"file\" id=\"update\" name=\"update\" required></td></tr>\n");
+    body += F("<form id=\"config\" method=\"post\" action=\"/update\" enctype='multipart/form-data'><p><table style='width:100%;'>\n");
+    body += F("<tr><td>ESP-DMX current version (build):</td><td>"); body += version_mayor; body += "."; body += version_minor; body += " ("; body += build; body += F(")</td></tr>\n");
+//    body += F("<tr><td>Current firmware:</td><td>"); body += build; body += F("</td></tr>\n");
+    body += F("<tr><td>New firmware image:</td><td><input type=\"file\" id=\"update\" name=\"update\" required></td></tr>\n");
     body += F("<tr><td></td><td><button type=\"submit\">Update</button></td></tr>\n</table><p>\n");
 
     String foot = http_foot();
