@@ -8,6 +8,9 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <ESP8266WebServer.h>
+#include <ESP8266HTTPClient.h>
+//#include <WiFiClientSecure.h>
+#include <ESP8266httpUpdate.h>
 #include <WiFiManager.h> 
 #include <WiFiUdp.h>
 #include <FS.h>
@@ -16,6 +19,9 @@
 #include "dmx512.h"
 #include "statusLED.h"
 #include "esp-dmx.h"
+
+//#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
+//#include <esp_log.h>
 
 extern ESP8266WebServer webServer;
 extern Config config;
@@ -37,8 +43,12 @@ extern int temperature;
 extern int fanspeed;
 extern int dmxFrameCounter;
 extern long micros_dmxsend;
+bool newFwAvailable;
+String newFwURL;
 extern long debugval;
-
+String debugstring = "nothing yet";
+int new_mayor = 0;
+int new_minor = 0;
 
 /*
  * Set default config on initial boot if there is no configuration yet
@@ -153,22 +163,189 @@ String http_foot() {
 }
 
 
+// #define FWHOST "https://raw.githubusercontent.com"
+// #define FWDIR "/markusb/esp-dmx/master/"
+// #define FWHOST "http://192.168.15.148"
+#define FWDIR "/"
+#define FWHOST "http://markonic.com"
+#define FWVERSIONFILE "esp-dmx-release.txt"
+#define FWBIN "esp-dmx-"
+String httpsHost;
+#define CORE_DEBUG_LEVEL=5
+using namespace BearSSL;
+bool checkForNewVersion () {
+    char lastSslError[200];
+    HTTPClient httpClient;
+    String versionURL = (String)FWHOST + (String)FWDIR + (String)FWVERSIONFILE;
+    int httpCode = 0;
+    String newFWVersion;
+
+    Serial.print("===== checkForNewVersion: URL=");
+    Serial.println(versionURL);
+    debugstring = "versionURL="+versionURL;
+    
+    if (versionURL.startsWith("https:")) {
+        httpsHost = versionURL.substring(8);
+        int i = httpsHost.indexOf("/");
+        httpsHost.remove(i);
+        debugstring += " host="; debugstring += httpsHost;
+        BearSSL::WiFiClientSecure httpsClient;
+        httpsClient.setInsecure();
+        Serial.printf("Connecting to host %s, port 443\n",httpsHost.c_str());
+        for (i = 512; i <= 4096; i=i*2) {
+            Serial.printf("    Probing for smaller SSL buffer: %d ",i);
+            if (httpsClient.probeMaxFragmentLength(httpsHost,443,i)) {
+                Serial.println("OK");
+                break;
+            } else {
+                Serial.println("Nope");
+            }
+        }
+        if (i == 8196) {
+            Serial.println("    Warning ! MFLN negotation failed, may get buffer overflow");
+        }
+        i=1024;
+        Serial.printf("    Setting buffer size to %d\n",i);
+        httpsClient.setBufferSizes(i,i);
+        int e = httpsClient.connect(httpsHost,443);
+        if (!e) {
+            debugstring += " Connect failed";
+            Serial.print("httpsClient.connect failed with error ");
+            Serial.println(e);
+            e = httpsClient.getLastSSLError(lastSslError,200);
+            Serial.printf("LastSSLError: %d %s\n",e,lastSslError);
+            httpCode = -1;
+            newFwURL = "Failed SSL connect";
+        } else {
+            debugstring = " ssl connetc ok";
+            Serial.printf("ESP free heap: %d\n", ESP.getFreeHeap());
+    //        httpCode = httpsClient.GET();      
+            String getRequest = "GET "; getRequest += FWDIR; getRequest += FWVERSIONFILE; getRequest += " HTTP/1.1\r\nHost: " + httpsHost + "\r\n" + "User-Agent: ESP8266 esp-dmx\r\n\r\n";
+            Serial.println("Sending GET request: "); Serial.println(getRequest);
+            httpsClient.print(getRequest);
+    //        httpsClient.print(String("GET ") + FWVERSIONFILE + " HTTP/1.1\r\n" +
+    //               "Host: " + httpsHost + "\r\n" +          
+    //               "Connection: close\r\n\r\n");
+            httpsClient.flush();
+            Serial.println("Reading returned header");
+            while (httpsClient.connected()) {
+                String line = httpsClient.readStringUntil('\n');
+                Serial.print("    Header: "); Serial.println(line.c_str());
+                //    Header: HTTP/1.1 200 OK
+                if (line.startsWith("HTTP")) {
+                    int i=line.indexOf(" ");
+                    String httpcode = line.substring(i+1,i+4);
+                    httpCode=httpcode.toInt();
+                    Serial.println("    -- Checking for http code: "+httpcode+" "+httpCode);
+                }
+                if (line == "\r") {  // empty line is end of header
+                     break;
+                }
+            }
+    //        newFWVersion = httpsClient.getString();
+            Serial.println("Reading returned data");
+            while(httpsClient.available()) {
+                newFWVersion += httpsClient.readStringUntil('\n');  // Read Line by Line
+//                Serial.println(newFWVersion); // Print response
+            }
+//            httpCode = 200;
+        }
+    } else {
+        // http URL
+        httpClient.begin( versionURL );
+        httpCode = httpClient.GET();
+        newFWVersion = httpClient.getString();
+    }
+    if( httpCode == 200 ) {
+        debugstring += "Sucess: "+newFWVersion;
+      
+        Serial.printf( "Current firmware version: %d.%d\n",version_mayor, version_minor);
+
+        int i = newFWVersion.lastIndexOf("Latest-release: ");
+        newFWVersion.remove(0,i);
+        i = newFWVersion.indexOf(".");
+        String sminor = newFWVersion;
+        String smayor = newFWVersion;
+        sminor.remove(0,i+1);   // Remove everything up to the decimal point
+        smayor.remove(i);       // Remove everything including and after the decimal point
+        smayor.remove(0,16);    // Remove the text 'Latest-release: '
+        new_mayor = smayor.toInt();
+        new_minor = sminor.toInt();
+        
+        debugstring += " smayor="; debugstring += smayor; debugstring += " sminor="; debugstring += sminor;
+        debugstring += " newVers="; debugstring += new_mayor; debugstring += "."; debugstring += new_minor;
+        
+        Serial.printf( "Firmware on server: %d.%d\n",new_mayor, new_minor);
+        if (new_mayor > version_mayor) {
+            newFwAvailable = true;
+        } else if ( new_minor > version_minor ) {
+            newFwAvailable = true;
+        } else {
+            newFwAvailable = false;
+        }
+        if (newFwAvailable) {
+            newFwURL = (String)FWHOST + (String)FWDIR + (String)FWBIN; newFwURL += new_mayor; newFwURL+= "."; newFwURL += new_minor; newFwURL += ".bin";
+            debugstring += " new URL="; debugstring += newFwURL;
+            Serial.printf("URL: %s\n",newFwURL.c_str());
+        }
+    } else {
+        debugstring += "Error "; debugstring += httpCode; debugstring += " retrieving "; debugstring += (String)FWHOST + (String)FWDIR + (String)FWVERSIONFILE;
+        Serial.printf("Error %d retrieving ",httpCode);
+        Serial.println((String)FWHOST + (String)FWDIR + (String)FWVERSIONFILE);
+    }
+
+}
+
+
 /*
  * Restart the device after a sucessful upload of new firmware via webinterfac
  */
+#define UPDATE_FILE 1
+#define UPDATE_URL 2
 void ota_restart() {
     Serial.println("HTTP: ota_restart");
     Serial.print("hasError: ");
     Serial.println((Update.hasError()) ? "FAIL" : "OK");
 
+    int updatetype = 0;
     setStatusLED(LED_RED,500);
 
     String page = http_head(PAGE_RESTART);
 
-    if (Update.hasError()) {
-        page += "<p>Error: "+Update.getError();
-    } else {
-        page += "<p><h1>Update complete - rebooting</h1>";
+    for (uint8_t i = 0; i < webServer.args(); i++) {
+        if (webServer.argName(i) == "updatefile") { updatetype = UPDATE_FILE; }
+        if (webServer.argName(i) == "updateurl")  { updatetype = UPDATE_URL;  }
+    }
+
+    if (updatetype == UPDATE_URL) {
+        page += F("<p>Updating from URL: "); page += newFwURL;
+        
+//        t_httpUpdate_return ret = ESPhttpUpdate.update( (BearSSL::WiFiClientSecure)httpsClient, httpsHost, newFwURL );
+        ESPhttpUpdate.rebootOnUpdate(false);
+        t_httpUpdate_return ret = ESPhttpUpdate.update( newFwURL );
+        switch(ret) {
+            case HTTP_UPDATE_FAILED:
+                page += F("<p>HTTP_UPDATE_FAILED Error: "); page += ESPhttpUpdate.getLastError();
+                page += F(" Text: "); page += ESPhttpUpdate.getLastErrorString();
+                Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s",  ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+                break;
+            case HTTP_UPDATE_NO_UPDATES:
+                page += F("<p>HTTP_UPDATE_NO_UPDATES");
+                Serial.println("HTTP_UPDATE_NO_UPDATES");
+                break;
+            case HTTP_UPDATE_OK:
+                page += F("<p>HTTP_UPDATE_OK");
+                Serial.println("HTTP_UPDATE_OK");
+                break;
+        }
+    }
+    if (updatetype == UPDATE_FILE) {
+        if (Update.hasError()) {
+            page += F("<p>Error: ");
+            page += Update.getError();
+        } else {
+            page += F("<p><h1>Upload from file complete - rebooting</h1>");
+        }
     }
     
     webServer.sendHeader("Connection", "close");
@@ -273,6 +450,7 @@ void http_index() {
 //    page += F("<tr><td>DMX skipped:</td><td>"); page += dmxskip, page += F("</td></tr>\n");
 //    page += F("<tr><td>micros DMX send:</td><td>"); page += micros_dmxsend, page += F("</td></tr>\n");
     page += F("<tr><td>debugval:</td><td>"); page += debugval, page += F("</td></tr>\n");
+    page += F("<tr><td>debugstring:</td><td>"); page += debugstring, page += F("</td></tr>\n");
     page += F("</table>\n");
     page += http_foot();
     
@@ -424,11 +602,21 @@ void http_update() {
 
     String head = http_head(PAGE_UPDATE);
     String body;
-    body += F("<form id=\"config\" method=\"post\" action=\"/update\" enctype='multipart/form-data'><p><table style='width:100%;'>\n");
+    body += F("<p><table style='width:100%;'>\n");
     body += F("<tr><td>ESP-DMX current version (build):</td><td>"); body += version_mayor; body += "."; body += version_minor; body += " ("; body += build; body += F(")</td></tr>\n");
-//    body += F("<tr><td>Current firmware:</td><td>"); body += build; body += F("</td></tr>\n");
-    body += F("<tr><td>New firmware image:</td><td><input type=\"file\" id=\"update\" name=\"update\" required></td></tr>\n");
-    body += F("<tr><td></td><td><button type=\"submit\">Update</button></td></tr>\n</table><p>\n");
+    if (newFwAvailable) {
+        body += F("<form id=\"updateonline\" method=\"post\" action=\"/update\" enctype='multipart/form-data'>");
+        body += F("<tr><td>New online version available:</td><td>"); body += new_mayor; body += "."; body += new_minor; body += F("</td></tr>\n");
+        body += F("<tr><td></td><td><button name='updateurl' type=\"submit\">Update from online</button>&nbsp;(");
+        body += newFwURL += F(")</td></tr>");
+        body += F("</form>");
+    } else {
+        body += F("<tr><td></td><td>This the latest version available online</td></tr>\n");    
+    }
+    body += F("<form id=\"updatefile\" method=\"post\" action=\"/update\" enctype='multipart/form-data'>");
+    body += F("<tr><td>New firmware image file:</td><td><input type=\"file\" id=\"update\" name=\"update\" required></td></tr>\n");
+    body += F("<tr><td></td><td><button name='updatefile' type=\"submit\">Upload and update from File</button>");
+    body += F("</td></tr>\n</form></table><p>\n");
 
     String foot = http_foot();
 

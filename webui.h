@@ -20,5 +20,6 @@ void http_dmx512png();
 void http_error404(void);
 void ota_restart(void);
 void ota_upload(void);
+bool checkForNewVersion();
 
 #endif // _WEBUI_H_

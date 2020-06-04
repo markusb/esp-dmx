@@ -32,9 +32,10 @@
 
 // wifi manager can be replaced during development with harcoded ssid/password during development
 // as re-flashing from Arduino wipes out the SPIFFS and the wifi config
-#define WIFIMANAGER
-#define MYSSID "ssid"
-#define MYPASS "pass"
+//#define WIFIMANAGER
+#ifndef WIFIMANAGER
+#include "wifi-credentials.h"
+#endif
 
 // Struct for configurable values
 struct Config config;
@@ -52,7 +53,7 @@ ESP8266WebServer webServer(80);
 const char build_text[] = { BUILD_YEAR,BUILD_MONTH,BUILD_DAY,'-',BUILD_TIME,'\0' };
 const char* build = &build_text[0];
 int version_mayor = 1;
-int version_minor = 0;
+int version_minor = 2;
 
 // Artnet settings
 ArtnetnodeWifi artnetnode;
@@ -73,6 +74,7 @@ long millis_dmxready=0;         // received matching artnet frame timestamp
 long millis_serialstatus=0;     // timestamp for periodical status on serial port
 long millis_dmxsend = 0;        // timestamp for limiting the dmx transmit rate
 long millis_statusled = 0;      // for status led change
+long millis_checkversion = 0;   // timestamp to check for new version
 long dmxskip = 0;       // counter for artnet frames not sent as DMX
 long millis_analogread = 0;
 long dmxloop;
@@ -82,6 +84,9 @@ int last_rssi;               // Wifi RSSI for display
 
 int temperature = 0;  // temperature in deg c
 int tempAdc = 0;      // temperature reading from ADC
+
+//#define VERSIONCHECKINTERVAL (3600 * 24 * 7 * 1000)   // Check for new version once a week
+#define VERSIONCHECKINTERVAL 10000
 
 int fanspeed = 0;     // speed of the fan
 
@@ -172,7 +177,6 @@ int readTemperature () {
     
     // read the ADC
     int i = analogRead(PIN_ANALOG);
-    debugval = i;
 
     // initialize the smooting on the first call
     if (tempAdc == 0) {
@@ -456,7 +460,7 @@ void setup() {
     millis_analogread = millis();
     millis_web    = 0;
     millis_dmxready = 0;
-
+    millis_checkversion = 0;
     Serial.println("ESP-DMX: setup done");
     
 //    powerOnShow();   
@@ -542,7 +546,12 @@ void loop() {
         Serial.printf("ESP-DMX loop: status = %s, RSSI=%i, dmxPacket=%d (u=%d), dmxUMatch=%d, u=%d, dmx sent=%d\n",
                        status_text[status],last_rssi,artnetPacketCounter,seen_universe,dmxUMatchCounter,config.universe,dmxFrameCounter);
     }      
-    
+
+    debugval = millis() - millis_checkversion;
+    if ((millis() - millis_checkversion ) > VERSIONCHECKINTERVAL ) {
+        millis_checkversion = millis();
+        checkForNewVersion();
+    }
     // limit loop speed
     delay(1);
 } // loop

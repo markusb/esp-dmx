@@ -1,0 +1,7 @@
+This file is used for updating directly from a webserver.
+It contains the version/release and filename of the latest release.
+The image must be placed in the same directory as this file.
+
+Latest-release: 1.2
+Filename: esp-dmx-1.2.bin
+
