@@ -8,8 +8,11 @@ Todo:
 - Improve update webinterface
   - Display progress page immediately after pressing Update button
     Seems pretty impossible, must implement in Javascript
-- Update from internet
-- Make poweronshow configurable
+- Make poweronshow configurable, (number of channels, start channel)
+- Make update-URL configurable
+- Show MAC address in webinterface
+- Online-Update: Get filename from txt file
+- Online-Update: Make ssl work
 
 Done:
 - Allow parameter reset and wifi reset separately
