@@ -459,17 +459,21 @@ void http_index() {
     Serial.println("HTTP: Sending index page");
 
     String page = http_head(PAGE_INDEX);
-    page += F("<p><table style='width:100%; border:1px solid black;'>\n");
+//    page += F("<p><table style='width:100%; border:1px solid black;'>\n");
+    page += F("<p><table style='width:100%;'>\n");
     page += F("<tr><td>Hostname:</td><td>"); page += config.hostname; page += F("</td></tr>\n");
     page += F("<tr><td>Wifi SSID:</td><td>"); page += WiFi.SSID(); page += F("</td></tr>\n");
     page += F("<tr><td>RSSI (signal strength):</td><td>"); page += last_rssi; page += F("</td></tr>\n");
     page += F("<tr><td>IP:</td><td>"); page += IP2String(WiFi.localIP()); page += F("</td></tr>\n");
+    page += F("<tr><td>MAC:</td><td>"); page += WiFi.macAddress(); page += F("</td></tr>\n");
     page += F("<tr><td>ESP-DMX version (build):</td><td>"); page += version_mayor; page += "."; page += version_minor; page += " ("; page += build; page += F(")</td></tr>\n");
+    page += F("<tr><td colspan=2><hr style='width:100%; height:1px; border:none; background:black;'></td><td>");
     page += F("<tr style='border-top: 1px solid black;'><td>Universe:</td><td>"); page += config.universe; page += F("</td></tr>\n");
     page += F("<tr><td>Channels:</td><td>"); page += config.channels; page += F("</td></tr>\n");
     page += F("<tr><td>Delay:</td><td>"); page += config.delay; page += F("</td></tr>\n");
     page += F("<tr><td>Seconds to hold last frame after signal loss:</td><td>"); page += config.holdsecs; page += "</td></tr>\n";
-    page += F("<tr style='border-top: 1px solid black;'><td>Artnet packets seen:</td><td>"); page += artnetPacketCounter; page += F(" (universe:");
+    page += F("<tr><td colspan=2><hr style='width:100%; height:1px; border:none; background:black;'></td><td>");
+    page += F("<tr><td>Artnet packets seen:</td><td>"); page += artnetPacketCounter; page += F(" (universe:");
     page += seen_universe; page += F(")</td></tr>\n");
     page += F("<tr><td>DMX frames sent:</td><td>"); page += dmxFrameCounter; page += F("</td></tr>\n");
     page += F("<tr><td>DMX packet length:</td><td>"); page += global.length; page += F(" (channels)</td></tr>\n");
