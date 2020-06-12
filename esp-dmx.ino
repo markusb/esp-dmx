@@ -148,7 +148,8 @@ int readTemperature () {
     float ntcRes;
 
     // only read the ADC every 500ms, otherwise Wifi breaks 
-    if ((millis() - millis_analogread) > 500) { return 0; }
+    if (millis() < (millis_analogread + 500)) { return 0; }
+    millis_analogread = millis();
     
     // read the ADC
     int i = analogRead(PIN_ANALOG);
@@ -166,7 +167,9 @@ int readTemperature () {
 
     // calculate temparature from NTC resistance
     temperature = int(betaNTC(ntcRes));
-
+#ifdef REMOTEDEBUG    
+    debugD("temp=%d ntcRes=%d i=%d",temperature,ntcRes,i);
+#endif
     return temperature;
 }
 
