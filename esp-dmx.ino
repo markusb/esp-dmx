@@ -17,16 +17,16 @@
 #include <WiFiClient.h>
 #include <ArtnetnodeWifi.h>       // https://github.com/rstephan/ArtnetnodeWifi
 #include <Adafruit_NeoPixel.h>    // Driver for the WS2812 color LED
+//#define REMOTEDEBUG
+#ifdef REMOTEDEBUG
+#include "RemoteDebug.h"          // https://github.com/JoaoLopesF/RemoteDebug
+#endif
 #include <FS.h>
 #include "webui.h"
 #include "send_break.h"
 #include "statusLED.h"
 #include "esp-dmx.h"
 
-//#define MIN(x,y) (x<y ? x : y)
-//#define MAX(x,y) (x>y ? x : y)
-//#define MIN(a,b) (((a)<(b))?(a):(b))
-//#define MAX(a,b) (((a)>(b))?(a):(b))
 #define MIN(a,b) ({ __typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a < _b ? _a : _b; })
 #define MAX(a,b) ({ __typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a > _b ? _a : _b; })
 
@@ -45,6 +45,10 @@ struct globalStruct global;
 
 ESP8266WebServer webServer(80);
 
+#ifdef REMOTEDEBUG
+RemoteDebug Debug;
+#endif
+
 // Assemble build string from compile time date
 #define BUILD_YEAR  __DATE__[7],__DATE__[8],__DATE__[9],__DATE__[10]
 #define BUILD_MONTH __DATE__[0],__DATE__[1],__DATE__[2]
@@ -53,7 +57,7 @@ ESP8266WebServer webServer(80);
 const char build_text[] = { BUILD_YEAR,BUILD_MONTH,BUILD_DAY,'-',BUILD_TIME,'\0' };
 const char* build = &build_text[0];
 int version_mayor = 1;
-int version_minor = 2;
+int version_minor = 4;
 
 // Artnet settings
 ArtnetnodeWifi artnetnode;
@@ -90,8 +94,6 @@ int tempAdc = 0;      // temperature reading from ADC
 
 int fanspeed = 0;     // speed of the fan
 
-#define NEOPIXEL
-
 // Status codes for display
 int status;
 char * status_text[] = { "", "Booting", "Config not found", "Config found", "Init complete", "Ready", "Serving webrequest", "DMX seen", "DMX received", "DMX holding" };
@@ -112,37 +114,10 @@ char * status_text[] = { "", "Booting", "Config not found", "Config found", "Ini
 #define PIN_FAN 16        // GPIO16/D0
 
 // RGB LED as status display
-#ifdef NEOPIXEL
 #define PIN_NEOPIXEL 13 // GPIO13/D7
-Adafruit_NeoPixel statusLED = Adafruit_NeoPixel(1, PIN_NEOPIXEL, NEO_GRB);
-#else
-#define PIN_LED_B 14    // GPIO16/D5  (conflicts with fan)
-#define PIN_LED_G 13    // GPIO13/D7
-#define PIN_LED_R 12    // GPIO12/D6
-#endif
+Adafruit_NeoPixel neoPixel = Adafruit_NeoPixel(1, PIN_NEOPIXEL, NEO_GRB);
 
-/*
- * Set the status LED(s) to a specified color
- */
-int ledcolor = 0;
-void setStatusLED(int color, int duration) {
-    // if the minimal duration is not met, then we ignore the status LED change
-//    if (((millis() - millis_statusled) < duration) && (ledcolor != color)) {
-    if (ledcolor != color) {
-//        Serial.println("LED change to color: "+color);
-        ledcolor = color;
-        millis_statusled = millis();
-#ifdef NEOPIXEL
-        statusLED.setPixelColor(0,color);
-        statusLED.show();
-#else
-        if (color && 0x0ff0000) digitalWrite(PIN_LED_R, LOW); else digitalWrite(PIN_LED_R, HIGH);
-        if (color && 0x000ff00) digitalWrite(PIN_LED_G, LOW); else digitalWrite(PIN_LED_G, HIGH);
-        if (color && 0x00000ff) digitalWrite(PIN_LED_B, LOW); else digitalWrite(PIN_LED_B, HIGH);
-#endif
-    }
-}
-
+statusLED LED = statusLED(neoPixel);
 
 /*
  * Temperature measurements
@@ -278,59 +253,90 @@ void onArtnetFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t
 
 
 /*
- * Show some light pattern after boot
+ * Set fill dmx buffer to value every 8 channels  
  */
 void setDmxBuf(int c, uint8_t v) {
-//    global.data[c]=v;
     for (int i=0; i<=64; i++) {
         global.data[c+i*8]=v;
     }
 }
 
-void powerOnShow () {
+uint8_t pOnPat[8][8] = {{ 0xff, 0x00, 0x00, 0x00, 0xff, 0x00, 0xff, 0x00 },
+                        { 0x00, 0xff, 0x00, 0xff, 0x00, 0xff, 0x00, 0xff },
+                        { 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 },
+                        { 0xff, 0xff, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00 },
+                        { 0xff, 0x00, 0xff, 0x00, 0x00, 0xff, 0x00, 0x00 },
+                        { 0x00, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff },
+                        { 0x00, 0x00, 0x00, 0xff, 0x00, 0xff, 0x00, 0x00 },
+                        { 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00 }};
+
+/*
+ * Show some light pattern after boot
+ */
+void powerOnShow (int ch1, int numch) {
+#ifdef REMOTEDEBUG
+    debugD("powerOnShow: ch1=%d, chnu=%d\n",ch1,numch);
+#endif    
+    if (ch1==0) { return; } // poweron show disabled
+
+    // enable DMX driver
     digitalWrite(PIN_DMX_ENABLE, HIGH);
 
-    setStatusLED(LED_BLUE,200);
-    delay(200);
-    setStatusLED(LED_ORANGE,200);
+    // mode 0 = some pattern on all DMX channels
+    if (numch==0) {
+        for (int i=0; i<=60; i++) {
+            for (int j=1; j<=8; j++) {
+                setDmxBuf(ch1+j-2,abs(int(0xff*sin(i*PI/20+j*PI/8))));
+//                global.data[ch1+j-2] = abs(int(0xff*sin(i*PI/20+j*PI/8)));
+            }
+            sendDmxData(0);
+            delay(20); 
+        }
+        for (int i=1; i<=8; i++) {
+            for (int j=1; j<=8; j++) {
+                setDmxBuf(i,pOnPat[i][j]);
+            }
+            sendDmxData(0);
+            delay(10); 
+        }
+        digitalWrite(PIN_DMX_ENABLE, LOW);
+        return;
+    }    
 
-    setDmxBuf(0,255);
-    setDmxBuf(1,255);
-    setDmxBuf(2,0);
-    setDmxBuf(3,0);
-    setDmxBuf(4,0);
-    setDmxBuf(5,0);
-    setDmxBuf(6,0);
-    setDmxBuf(7,0);
-    sendDmxData(0);
-    delay(200);
-    
+    // special pattern for single channel
+    if (numch==1) {
+#ifdef REMOTEDEBUG
+        debugD("Pattern1: start");
+#endif
+        LED.setColor(LED_BLUE);
+        delay(100);
+        for (int i=0; i<60; i++) {
+#ifdef REMOTEDEBUG          
+            debugD("Pattern1: i%d, led=%d\n",i,0xff*(i%2));
+#endif
+            global.data[ch1-1] = abs(int(0xff*sin(i*PI/20)));
+//            global.data[ch1-1] = 0xff*(i%2);
+            sendDmxData(0);
+            LED.setColor(LED_YELLOW);
+            delay(20);
+            LED.setColor(LED_BLUE);
+            
+//            delay(100);
+        }
+        digitalWrite(PIN_DMX_ENABLE, LOW);
+        return;
+    }
 
-    setDmxBuf(2,255);
-    sendDmxData(0);
-    delay(200);
-
-    setDmxBuf(3,255);
-    sendDmxData(0);
-    delay(200);
-
-    setDmxBuf(4,255);
-    sendDmxData(0);
-    delay(200);
-
-    setDmxBuf(5,255);
-    sendDmxData(0);
-    delay(200);
-
-    setDmxBuf(6,255);
-    sendDmxData(0);
-
-    delay(500);
-    for (int i=0; i<=512; i++) { global.data[i]=0; }
-    sendDmxData(0);
-
-    delay(50);
+    // pattern for more than 1 channel
+    for (int i=0; i<=60; i++) {
+        for (int j=1; j<=numch; j++) {
+            global.data[ch1+j-2] = abs(int(0xff*sin(i*PI/20+j*PI/numch)));
+        }
+        sendDmxData(0);
+        delay(20); 
+    }
     digitalWrite(PIN_DMX_ENABLE, LOW);
+    return;
 }
 
 /*
@@ -344,18 +350,14 @@ void setup() {
 
     // set up status LED(s)
     millis_statusled = millis();
-#ifdef NEOPIXEL
-    statusLED.begin();
-#else
-    pinMode(PIN_LED_R, OUTPUT);
-    pinMode(PIN_LED_G, OUTPUT);
-    pinMode(PIN_LED_B, OUTPUT);
-#endif
+
+    neoPixel.begin();
+
     pinMode(PIN_FAN, OUTPUT);
     setFan(1024);
 
     // Display booting status on LED
-    setStatusLED(LED_RED,1000);
+    LED.setColor(LED_RED);
     status = STATUS_BOOTING;
     
     // set up 2ns serial port for DMX output and a pin for the Max485 enable
@@ -378,11 +380,11 @@ void setup() {
     Serial.println("ESP-DMX: load config");
     if (loadConfig()) {
         Serial.println("ESP-DMX: config loaded");
-        setStatusLED(LED_YELLOW,500);
+        LED.setColor(LED_YELLOW);
         delay(200);
     } else {
         Serial.println("ESP-DMX: config not found, setting defaults");
-        setStatusLED(LED_WHITE,500);
+        LED.setColor(LED_WHITE);
         defaultConfig();
         delay(200);
     }
@@ -415,7 +417,7 @@ void setup() {
 #endif
 
     if (WiFi.status() != WL_CONNECTED) {
-        setStatusLED(LED_RED,500);
+        LED.setColor(LED_RED);
         Serial.println("Wifi connection failed !!!!!");
     }
 
@@ -427,6 +429,12 @@ void setup() {
     Serial.print("IP: ");
     Serial.println(WiFi.localIP());
 
+#ifdef REMOTEDEBUG
+    // set up RemoteDebug
+    Debug.begin(config.hostname);
+    Debug.setResetCmdEnabled(true); // Enable the reset command
+#endif
+    
     // Set up webinterface
     Serial.println("ESP-DMX: setting up webserver");
 
@@ -439,6 +447,7 @@ void setup() {
     webServer.on("/restart", webServer.method(), []() { millis_web = millis(); http_restart(); });
     webServer.on("/update",      HTTP_GET, []         { millis_web = millis(); http_update(); });
     webServer.on("/update",     HTTP_POST, ota_restart, ota_upload);
+    webServer.on("/pos",         HTTP_GET, []         { http_pos(); });
 
     webServer.begin();
 
@@ -463,13 +472,18 @@ void setup() {
     millis_checkversion = 0;
     Serial.println("ESP-DMX: setup done");
     
-//    powerOnShow();   
+    powerOnShow(config.pOnShowCh1,config.pOnShowNumCh);   
 } // setup
 
 /*
  * Main loop for processing
  */
 void loop() {
+#ifdef REMOTEDEBUG
+    Debug.handle();
+#endif
+    LED.handle();
+    
     readTemperature();
 
     fanControl();
@@ -487,7 +501,7 @@ void loop() {
     // Main processing here
     if (WiFi.status() != WL_CONNECTED) {
         // If no wifi, then show red LED
-        setStatusLED(LED_ORANGE,500);
+        LED.setColor(LED_ORANGE);
         Serial.println("ESP-DMX loop: No wifi connection !!!");
         delay(500);
     } else {
@@ -496,8 +510,7 @@ void loop() {
             // If there was a web interaction, then show blue LED for 2 seconds, DMX sending is paused
             //
             status = STATUS_WEBREQUEST;
-            setStatusLED(LED_BLUE,200);
-//            delay(50);
+//            LED.setColor(LED_BLUE);
         }
         if ((millis() - millis_dmxready) < 2000) {
             //
@@ -505,7 +518,7 @@ void loop() {
             //
             // Show the green LED and set status
             //
-            setStatusLED(LED_GREEN,500);
+            LED.setColor(LED_GREEN);
             status = STATUS_DMX_RECEIVED;
             digitalWrite(PIN_DMX_ENABLE, HIGH);
             //
@@ -519,7 +532,7 @@ void loop() {
             //
             // Continue to send DMX frames for holdsec seconds
             //
-            setStatusLED(LED_BLUE,500);
+            LED.setColor(LED_GREEN,150);
             status = STATUS_DMX_HOLDING;
             digitalWrite(PIN_DMX_ENABLE, HIGH);
             sendDmxData(config.delay);
@@ -527,7 +540,7 @@ void loop() {
             //
             // There was an artnet frame seen, show cyan LED
             //
-            setStatusLED(LED_CYAN,500);
+            LED.setColor(LED_CYAN);
             status = STATUS_DMX_SEEN;
             digitalWrite(PIN_DMX_ENABLE, LOW);
         } else {
@@ -535,7 +548,7 @@ void loop() {
             // No DMX received show redy state
             //
             status = STATUS_READY;
-            setStatusLED(LED_PINK,500);
+            LED.setColor(LED_GREEN,1000);
             digitalWrite(PIN_DMX_ENABLE, LOW);
         }
     }
@@ -545,6 +558,10 @@ void loop() {
         millis_serialstatus = millis();
         Serial.printf("ESP-DMX loop: status = %s, RSSI=%i, dmxPacket=%d (u=%d), dmxUMatch=%d, u=%d, dmx sent=%d\n",
                        status_text[status],last_rssi,artnetPacketCounter,seen_universe,dmxUMatchCounter,config.universe,dmxFrameCounter);
+#ifdef REMOTEDEBUG                       
+        debugV("ESP-DMX: status = %s, RSSI=%i, dmxPacket=%d (u=%d), dmxUMatch=%d, u=%d, dmx sent=%d",
+                       status_text[status],last_rssi,artnetPacketCounter,seen_universe,dmxUMatchCounter,config.universe,dmxFrameCounter);
+#endif                       
     }      
 
     debugval = millis() - millis_checkversion;

@@ -30,6 +30,7 @@ extern int version_mayor;
 extern int version_minor;
 extern long dmxloop;
 extern int status;
+extern statusLED LED;
 extern char * status_text[];
 extern unsigned long packetCounter;
 extern unsigned long dmxUMatchCounter;
@@ -37,7 +38,7 @@ extern unsigned long artnetPacketCounter;
 extern uint16_t seen_universe;
 extern long dmxskip;
 extern int last_rssi;
-extern void setStatusLED(int,int);
+extern void powerOnShow(int,int);
 extern globalStruct global;
 extern int temperature;
 extern int fanspeed;
@@ -60,6 +61,9 @@ void defaultConfig() {
     config.holdsecs = 30;
     config.hostname = "ESP-DMX-"+WiFi.macAddress().substring(9);
     config.hostname.replace(":","");
+    config.fwURL = "http://"+WiFi.gatewayIP(); config.fwURL += "/";
+    config.pOnShowCh1 = 0;
+    config.pOnShowNumCh = 1;
 }
 
 
@@ -97,6 +101,9 @@ bool loadConfig() {
     if (jsonDoc.containsKey("channels")) { config.channels = jsonDoc["channels"]; } 
     if (jsonDoc.containsKey("delay")) { config.delay = jsonDoc["delay"]; } 
     if (jsonDoc.containsKey("holdsecs")) { config.holdsecs = jsonDoc["holdsecs"]; } 
+    if (jsonDoc.containsKey("fwURL")) { String fw = jsonDoc["fwURL"]; config.fwURL = fw; } 
+    if (jsonDoc.containsKey("pOnShowCh1")) { config.pOnShowCh1 = jsonDoc["pOnShowCh1"]; } 
+    if (jsonDoc.containsKey("pOnShowNumCh")) { config.pOnShowNumCh = jsonDoc["pOnShowNumCh"]; } 
     return true;
 }
 
@@ -113,6 +120,9 @@ bool saveConfig() {
     jsonDoc["channels"] = config.channels;
     jsonDoc["delay"] = config.delay;
     jsonDoc["holdsecs"] = config.holdsecs;
+    jsonDoc["fwURL"] = config.fwURL;
+    jsonDoc["pOnShowCh1"] = config.pOnShowCh1;
+    jsonDoc["pOnShowNumCh"] = config.pOnShowNumCh;
   
     File configFile = SPIFFS.open("/config.json", "w");
     if (!configFile) {
@@ -138,7 +148,7 @@ bool saveConfig() {
 #define PAGE_RESTART 5
 String http_head(int pageid) {
     String head =  F("<head><title>"); head += config.hostname; head += F("</title>");
-    if (pageid == PAGE_RESTART) { head += F("<meta http-equiv='refresh' content='10;url=/'></head>\n"); } else { head += F("</head>\n"); }
+    if (pageid == PAGE_RESTART) { head += F("<meta http-equiv='refresh' content='20;url=/'></head>\n"); } else { head += F("</head>\n"); }
            head += F("<body><h1 style='text-align: center;'>"); head += config.hostname; head += F("</h1>\n");
            head += F("<table style='width:100%;border: 1px solid black; text-align: center;'>\n<tr>");
     if (pageid == PAGE_INDEX)   { head += F("<td><b>Home</b></td>"); }    else { head += F("<td><a href='/'>Home</a></td>"); }
@@ -165,18 +175,20 @@ String http_foot() {
 
 // #define FWHOST "https://raw.githubusercontent.com"
 // #define FWDIR "/markusb/esp-dmx/master/"
-// #define FWHOST "http://192.168.15.148"
+// #define FWHOST "http://192.168.15.14"
 #define FWDIR "/"
-#define FWHOST "http://markonic.com"
+#define FWHOST "http://192.168.15.14"
 #define FWVERSIONFILE "esp-dmx-release.txt"
 #define FWBIN "esp-dmx-"
+String fwBaseUrl = (String)FWHOST + (String)FWDIR;
+String fwUpdateStatus;
 String httpsHost;
 #define CORE_DEBUG_LEVEL=5
 using namespace BearSSL;
 bool checkForNewVersion () {
     char lastSslError[200];
     HTTPClient httpClient;
-    String versionURL = (String)FWHOST + (String)FWDIR + (String)FWVERSIONFILE;
+    String versionURL = fwBaseUrl + (String)FWVERSIONFILE;
     int httpCode = 0;
     String newFWVersion;
 
@@ -261,6 +273,8 @@ bool checkForNewVersion () {
       
         Serial.printf( "Current firmware version: %d.%d\n",version_mayor, version_minor);
 
+        // extract version number from downloaded file
+        // Format: Latest-release: x.y
         int i = newFWVersion.lastIndexOf("Latest-release: ");
         newFWVersion.remove(0,i);
         i = newFWVersion.indexOf(".");
@@ -271,6 +285,14 @@ bool checkForNewVersion () {
         smayor.remove(0,16);    // Remove the text 'Latest-release: '
         new_mayor = smayor.toInt();
         new_minor = sminor.toInt();
+
+        // extract filename from downloaded file
+        // Format: Filename: <filename>
+        i = newFWVersion.lastIndexOf("Filename: ");
+        newFWVersion.remove(0,i);
+        i = newFWVersion.lastIndexOf(" ");
+        int j = newFWVersion.indexOf("\n");
+        newFwURL = (String)FWHOST + (String)FWDIR + newFWVersion.substring(i+1,j); // + newFWVersion + String(i) + String(j);
         
         debugstring += " smayor="; debugstring += smayor; debugstring += " sminor="; debugstring += sminor;
         debugstring += " newVers="; debugstring += new_mayor; debugstring += "."; debugstring += new_minor;
@@ -284,12 +306,21 @@ bool checkForNewVersion () {
             newFwAvailable = false;
         }
         if (newFwAvailable) {
-            newFwURL = (String)FWHOST + (String)FWDIR + (String)FWBIN; newFwURL += new_mayor; newFwURL+= "."; newFwURL += new_minor; newFwURL += ".bin";
+//            newFwURL = (String)FWHOST + (String)FWDIR + (String)FWBIN; newFwURL += new_mayor; newFwURL+= "."; newFwURL += new_minor; newFwURL += ".bin";
             debugstring += " new URL="; debugstring += newFwURL;
             Serial.printf("URL: %s\n",newFwURL.c_str());
+            fwUpdateStatus = "new firmware "+new_mayor;
+            fwUpdateStatus += "."+new_minor;
+            fwUpdateStatus += " availabe at "+newFwURL;
+        } else {
+            fwUpdateStatus = "This the latest version available at "+fwBaseUrl;
         }
     } else {
-        debugstring += "Error "; debugstring += httpCode; debugstring += " retrieving "; debugstring += (String)FWHOST + (String)FWDIR + (String)FWVERSIONFILE;
+        debugstring += " Error "; debugstring += httpCode; debugstring += " retrieving "; debugstring += (String)FWHOST + (String)FWDIR + (String)FWVERSIONFILE;
+        fwUpdateStatus  = "Error ";
+        fwUpdateStatus += String(httpCode);
+        fwUpdateStatus += " checking for new firmware at ";
+        fwUpdateStatus += fwBaseUrl;
         Serial.printf("Error %d retrieving ",httpCode);
         Serial.println((String)FWHOST + (String)FWDIR + (String)FWVERSIONFILE);
     }
@@ -308,7 +339,7 @@ void ota_restart() {
     Serial.println((Update.hasError()) ? "FAIL" : "OK");
 
     int updatetype = 0;
-    setStatusLED(LED_RED,500);
+    LED.setColor(LED_RED);
 
     String page = http_head(PAGE_RESTART);
 
@@ -365,7 +396,7 @@ void ota_upload() {
     if (upload.status == UPLOAD_FILE_START) {
         Serial.setDebugOutput(true);
         WiFiUDP::stopAll();
-        setStatusLED(LED_YELLOW,500);
+        LED.setColor(LED_YELLOW);
         uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
         Serial.printf("ota_upload: Upload start, filename: %s, space available: %u  ", upload.filename.c_str(),maxSketchSpace);
         if (!Update.begin(maxSketchSpace)) { //start with max available size
@@ -449,14 +480,29 @@ void http_index() {
 //    page += F("<tr><td>DMXloop:</td><td>"); page += dmxloop, page += F("</td></tr>\n");
 //    page += F("<tr><td>DMX skipped:</td><td>"); page += dmxskip, page += F("</td></tr>\n");
 //    page += F("<tr><td>micros DMX send:</td><td>"); page += micros_dmxsend, page += F("</td></tr>\n");
-    page += F("<tr><td>debugval:</td><td>"); page += debugval, page += F("</td></tr>\n");
-    page += F("<tr><td>debugstring:</td><td>"); page += debugstring, page += F("</td></tr>\n");
+//    page += F("<tr><td>debugval:</td><td>"); page += debugval, page += F("</td></tr>\n");
+//    page += F("<tr><td>debugstring:</td><td>"); page += debugstring, page += F("</td></tr>\n");
     page += F("</table>\n");
     page += http_foot();
     
     webServer.send(200, "text/html", page);
 }
 
+
+/*
+ * Assemble the main index and status page
+ */
+void http_pos() {
+    Serial.println("HTTP: Sending index page");
+
+    String page = http_head(PAGE_INDEX);
+    page += F("<p>PowerOnShow\n");
+    page += http_foot();
+    
+    webServer.send(200, "text/html", page);
+
+    powerOnShow(config.pOnShowCh1,config.pOnShowNumCh);
+}
 
 /*
  * Assemble the configuration form
@@ -477,7 +523,6 @@ void http_config() {
     String body; 
     String foot = http_foot();
 
-
     if (webServer.method() == HTTP_GET) {
         Serial.println("HTTP: config form GET");
     }
@@ -488,10 +533,13 @@ void http_config() {
         for (uint8_t i = 0; i < webServer.args(); i++) {
             message += " " + webServer.argName(i) + ": " + webServer.arg(i) + "\n";
             if (webServer.argName(i) == "hostname") { config.hostname = webServer.arg(i); }
+            if (webServer.argName(i) == "fwURL") { config.fwURL = webServer.arg(i); }
             if (webServer.argName(i) == "universe") { config.universe = webServer.arg(i).toInt(); }
             if (webServer.argName(i) == "channels") { config.channels = webServer.arg(i).toInt(); }
             if (webServer.argName(i) == "delay")    { config.delay = webServer.arg(i).toInt(); }
             if (webServer.argName(i) == "holdsecs") { config.holdsecs = webServer.arg(i).toInt(); }
+            if (webServer.argName(i) == "pOnShowCh1") { config.pOnShowCh1 = webServer.arg(i).toInt(); }
+            if (webServer.argName(i) == "pOnShowNumCh") { config.pOnShowNumCh = webServer.arg(i).toInt(); }
             if (webServer.argName(i) == "save")     { post_request = POST_REQUEST_SAVE; Serial.println("http_config: save"); }
             if (webServer.argName(i) == "formdefaults") { post_request = POST_REQUEST_FORMDEFAULTS; Serial.println("http_config: formdefaults"); }
             if (webServer.argName(i) == "wifidefaults") { post_request = POST_REQUEST_WIFIDEFAULTS; Serial.println("http_config: wifidefaults"); }
@@ -529,6 +577,15 @@ void http_config() {
         body += F("' required></td></tr>");
         body += F("<tr><td>Seconds to hold last state after signal loss:</td><td><input type='text' id='holdsecs' name='holdsecs' value='");
         body += config.holdsecs;
+        body += F("' required></td></tr>");
+        body += F("<tr><td>URL for updates:</td><td><input type='text' id='fwURL' name='fwURL' value='");
+        body += config.fwURL;
+        body += F("' required></td></tr>");
+        body += F("<tr><td>PowerOnShow 1st channel:</td><td><input type='text' id='pOnShowCh1' name='pOnShowCh1' value='");
+        body += config.pOnShowCh1;
+        body += F("' required>(0=Off)</td></tr>");
+        body += F("<tr><td>PowerOnShow mode/number of channels:</td><td><input type='text' id='pOnShowNumCh' name='pOnShowNumCh' value='");
+        body += config.pOnShowNumCh;
         body += F("' required></td></tr>");
         body += F("<tr><td></td><td><button name='save' type='submit'>Save Config</button></td></tr>\n");
         body += F("<tr><td colspan=2 align=center><button name='formdefaults' type='submit'>Reset config to defaults</button> ");
@@ -581,7 +638,7 @@ void http_restart () {
     if (webServer.method() == HTTP_POST) {
         Serial.println("POST (reset)");
         Serial.println("Resetting device");
-        setStatusLED(LED_RED,500); // red
+        LED.setColor(LED_RED); // red
 //        head = F("<head><title>"); head += config.hostname; head += F("</title><meta http-equiv='refresh' content='15;url=/'></head>\n");
         body += F("<h1 style='align: center;'>Resetting ...</h1><p>\n");
         webServer.send(200, "text/html", head+body+foot);
@@ -611,7 +668,7 @@ void http_update() {
         body += newFwURL += F(")</td></tr>");
         body += F("</form>");
     } else {
-        body += F("<tr><td></td><td>This the latest version available online</td></tr>\n");    
+        body += F("<tr><td></td><td>"); body += fwUpdateStatus; body += F("</td></tr>\n");    
     }
     body += F("<form id=\"updatefile\" method=\"post\" action=\"/update\" enctype='multipart/form-data'>");
     body += F("<tr><td>New firmware image file:</td><td><input type=\"file\" id=\"update\" name=\"update\" required></td></tr>\n");

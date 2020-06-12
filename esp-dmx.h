@@ -16,10 +16,13 @@ struct globalStruct {
 // Structure for configurable values
 struct Config {
   String hostname;
+  String fwURL;
   int universe;
   int channels;
   int delay;
   int holdsecs;
+  int pOnShowCh1;
+  int pOnShowNumCh;
 };
 
 #endif

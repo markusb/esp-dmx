@@ -18,10 +18,10 @@ Color | Meaning
 ------| -------
 <span style="color:red">Red</span>       | The device is booting
 <span style="color:yellow">Yellow</span> | Connecting to Wifi
-<span style="color:pink">Pink</span>     | Device is ready and connected to Wifi
+<span style="color:pink">Green (blink slow)</span>     | Device is ready and connected to Wifi
 <span style="color:cyan">Cyan</span>     | Artnet frames are detected, but ignored as the universe does not match
 <span style="color:green">Green</span>   | Artnet frames are received and transmitted to DMX
-<span style="color:blue">Blue</span>     | DMX frames are transmitted from buffer
+<span style="color:blue">Green (blink fast)</span>    | DMX frames are transmitted from buffer after Artnet signal loss
 
 Wherever there is activity on the web interface (configuration, monitoring), the LED turns blue. During web interface activity, the DMX512 output is silenced. A smooth web interface and smooth DMX signalling don't go together.
 

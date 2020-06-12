@@ -1,4 +1,0 @@
-This file is used for updating directly from Github.
-It contains the version/release of the latest release.
-
-Latest-release: 1.1

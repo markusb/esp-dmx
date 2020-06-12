@@ -12,6 +12,7 @@ void defaultConfig(void);
 bool loadConfig(void);
 bool saveConfig(void);
 void http_index();
+void http_pos();
 void http_config();
 void http_restart();
 void http_update();
